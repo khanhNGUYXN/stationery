@@ -1,0 +1,402 @@
+openapi: 3.1.0
+info:
+  title: HMT Stationery Management API
+  version: 0.1.0
+  description: API for stationery management, requests, approvals, reports, and notifications
+servers:
+  - url: http://localhost:8080/api
+security:
+  - bearerAuth: []
+paths:
+  /auth/login:
+    post:
+      tags: [Auth]
+      summary: Login
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LoginRequest"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LoginResponse"
+  /auth/change-password:
+    post:
+      tags: [Auth]
+      summary: Change password
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: query
+          name: currentPassword
+          required: true
+          schema:
+            type: string
+        - in: query
+          name: newPassword
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Password changed
+  /stationeries:
+    get:
+      tags: [Stationery]
+      summary: List stationeries
+      parameters:
+        - in: query
+          name: search
+          schema:
+            type: string
+        - $ref: "#/components/parameters/Page"
+        - $ref: "#/components/parameters/Size"
+        - $ref: "#/components/parameters/Sort"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PageStationeryDto"
+  /stationeries/{id}:
+    get:
+      tags: [Stationery]
+      summary: Get stationery by id
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+            format: int64
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StationeryDto"
+  /stationeries/{id}/availability:
+    get:
+      tags: [Stationery]
+      summary: Get availability for a stationery
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+            format: int64
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AvailabilityResponse"
+  /requests:
+    get:
+      tags: [Requests]
+      summary: List requests (mine or inbox)
+      parameters:
+        - in: query
+          name: mine
+          schema:
+            type: boolean
+        - in: query
+          name: inbox
+          schema:
+            type: boolean
+        - $ref: "#/components/parameters/Page"
+        - $ref: "#/components/parameters/Size"
+        - $ref: "#/components/parameters/Sort"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PageStationeryRequestDto"
+    post:
+      tags: [Requests]
+      summary: Create a request
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateRequest"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StationeryRequestDto"
+  /requests/{id}/approve:
+    post:
+      tags: [Requests]
+      summary: Approve request
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+            format: int64
+        - in: query
+          name: reason
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StationeryRequestDto"
+  /requests/{id}/reject:
+    post:
+      tags: [Requests]
+      summary: Reject request
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+            format: int64
+        - in: query
+          name: reason
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StationeryRequestDto"
+  /requests/{id}/withdraw:
+    post:
+      tags: [Requests]
+      summary: Withdraw request
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+            format: int64
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StationeryRequestDto"
+  /requests/{id}/cancel:
+    post:
+      tags: [Requests]
+      summary: Cancel request
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+            format: int64
+        - in: query
+          name: reason
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StationeryRequestDto"
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  parameters:
+    Page:
+      name: page
+      in: query
+      schema:
+        type: integer
+        minimum: 0
+      required: false
+    Size:
+      name: size
+      in: query
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 200
+      required: false
+    Sort:
+      name: sort
+      in: query
+      schema:
+        type: string
+      required: false
+  schemas:
+    LoginRequest:
+      type: object
+      required: [username, password]
+      properties:
+        username:
+          type: string
+        password:
+          type: string
+          format: password
+    EmployeeDto:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+        employeeNo:
+          type: string
+        name:
+          type: string
+        role:
+          type: string
+          enum: [ENGINEER, MANAGER, BUSINESS_MANAGER, MANAGING_DIRECTOR]
+        email:
+          type: string
+          format: email
+        grade:
+          type: string
+        location:
+          type: string
+        username:
+          type: string
+    LoginResponse:
+      type: object
+      properties:
+        token:
+          type: string
+        refreshToken:
+          type: string
+        employee:
+          $ref: "#/components/schemas/EmployeeDto"
+    StationeryDto:
+      type: object
+      properties:
+        id: { type: integer, format: int64 }
+        code: { type: string }
+        name: { type: string }
+        description: { type: string }
+        cost: { type: number, format: double }
+        stockQuantity: { type: integer }
+        minimumStock: { type: integer }
+        imageUrl: { type: string }
+        tags:
+          type: array
+          items: { type: string }
+        category: { type: string }
+        brand: { type: string }
+        model: { type: string }
+        specifications: { type: string }
+        isActive: { type: boolean }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+        monthlyLimit: { type: number, format: double }
+        quarterlyLimit: { type: number, format: double }
+        yearlyLimit: { type: number, format: double }
+        isEligible: { type: boolean }
+        availabilityStatus: { type: string }
+    AvailabilityResponse:
+      type: object
+      properties:
+        isAvailable: { type: boolean }
+        isEligible: { type: boolean }
+        stockQuantity: { type: integer }
+        cost: { type: number, format: double }
+    StationeryRequestDto:
+      type: object
+      properties:
+        id: { type: integer, format: int64 }
+        requestNumber: { type: string }
+        requester:
+          $ref: "#/components/schemas/EmployeeDto"
+        stationery:
+          type: object
+          properties:
+            id: { type: integer, format: int64 }
+            code: { type: string }
+            name: { type: string }
+            imageUrl: { type: string }
+        quantity: { type: integer }
+        toDate: { type: string, format: date }
+        reason: { type: string }
+        status:
+          {
+            type: string,
+            enum: [DRAFT, SUBMITTED, APPROVED, REJECTED, CANCELED, WITHDRAWN],
+          }
+        approver:
+          $ref: "#/components/schemas/EmployeeDto"
+        approvedAt: { type: string, format: date-time }
+        rejectionReason: { type: string }
+        totalCost: { type: number, format: double }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+        history:
+          type: array
+          items:
+            type: object
+            properties:
+              id: { type: integer, format: int64 }
+              action: { type: string }
+              description: { type: string }
+              actor: { $ref: "#/components/schemas/EmployeeDto" }
+              previousStatus: { type: string }
+              newStatus: { type: string }
+              createdAt: { type: string, format: date-time }
+    CreateRequest:
+      type: object
+      required: [stationeryId, quantity, toDate]
+      properties:
+        stationeryId: { type: integer, format: int64 }
+        quantity: { type: integer, minimum: 1 }
+        toDate: { type: string, format: date }
+        reason: { type: string }
+    PageStationeryDto:
+      type: object
+      properties:
+        content:
+          type: array
+          items:
+            $ref: "#/components/schemas/StationeryDto"
+        totalElements: { type: integer, format: int64 }
+        totalPages: { type: integer }
+        number: { type: integer }
+        size: { type: integer }
+    PageStationeryRequestDto:
+      type: object
+      properties:
+        content:
+          type: array
+          items:
+            $ref: "#/components/schemas/StationeryRequestDto"
+        totalElements: { type: integer, format: int64 }
+        totalPages: { type: integer }
+        number: { type: integer }
+        size: { type: integer }
+
+

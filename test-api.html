@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>Test API</title>
+  </head>
+  <body>
+    <h1>Test API</h1>
+    <button onclick="testAPI()">Test API</button>
+    <div id="result"></div>
+
+    <script>
+      async function testAPI() {
+        const resultDiv = document.getElementById("result");
+        resultDiv.innerHTML = "Testing...";
+
+        try {
+          // 1. Login
+          const loginResponse = await fetch(
+            "http://localhost:8080/api/auth/login",
+            {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                username: "manager",
+                password: "password",
+              }),
+            }
+          );
+          const loginData = await loginResponse.json();
+          const token = loginData.token;
+
+          // 2. Get My Requests
+          const requestsResponse = await fetch(
+            "http://localhost:8080/api/requests?mine=true",
+            {
+              headers: {
+                Authorization: `Bearer ${token}`,
+                "Content-Type": "application/json",
+              },
+            }
+          );
+          const requestsData = await requestsResponse.json();
+
+          resultDiv.innerHTML = `
+                    <h3>Login Success:</h3>
+                    <p>User: ${loginData.employee.name} (${
+            loginData.employee.role
+          })</p>
+                    
+                    <h3>My Requests:</h3>
+                    <p>Total: ${requestsData.totalElements}</p>
+                    <p>Size: ${requestsData.size}</p>
+                    <p>Number: ${requestsData.number}</p>
+                    
+                    <h3>Requests:</h3>
+                    <pre>${JSON.stringify(requestsData.content, null, 2)}</pre>
+                `;
+        } catch (error) {
+          resultDiv.innerHTML = `<p style="color: red;">Error: ${error.message}</p>`;
+        }
+      }
+    </script>
+  </body>
+</html>
