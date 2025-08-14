@@ -53,6 +53,13 @@ public interface StationeryRequestRepository extends JpaRepository<StationeryReq
         List<StationeryRequest> findByDateRange(@Param("fromDate") java.time.LocalDateTime fromDate,
                         @Param("toDate") java.time.LocalDateTime toDate);
 
+        @Query("SELECT sr FROM StationeryRequest sr " +
+                        "LEFT JOIN FETCH sr.requester " +
+                        "LEFT JOIN FETCH sr.stationery " +
+                        "LEFT JOIN FETCH sr.approver " +
+                        "ORDER BY sr.createdAt DESC")
+        Page<StationeryRequest> findAllOrderByCreatedAtDesc(Pageable pageable);
+
         @Query("SELECT COUNT(sr) FROM StationeryRequest sr WHERE sr.requester.id = :requesterId AND sr.status = 'APPROVED' AND sr.createdAt >= :fromDate")
         Long countApprovedRequestsByRequesterAndDateRange(@Param("requesterId") Long requesterId,
                         @Param("fromDate") java.time.LocalDateTime fromDate);

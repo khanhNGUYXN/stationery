@@ -1,6 +1,7 @@
 package com.hmt.stationery.service;
 
 import com.hmt.stationery.domain.Employee;
+import com.hmt.stationery.domain.Employee.Role;
 import com.hmt.stationery.domain.Stationery;
 import com.hmt.stationery.domain.StationeryRequest;
 import com.hmt.stationery.dto.StationeryRequestDto;
@@ -48,16 +49,33 @@ public class StationeryRequestService {
         request.setQuantity(createRequest.getQuantity());
         request.setToDate(createRequest.getToDate());
         request.setReason(createRequest.getReason());
-        request.setStatus(StationeryRequest.Status.SUBMITTED);
         request.setApprover(approver);
         request.setTotalCost(stationery.getCost().multiply(BigDecimal.valueOf(createRequest.getQuantity())));
 
-        request.addHistory("REQUEST_CREATED", "Request created", currentEmployee);
+        // Auto approve for SUPER_ADMIN
+        if (currentEmployee.getRole() == Role.SUPER_ADMIN) {
+            request.setStatus(StationeryRequest.Status.APPROVED);
+            request.setApprovedAt(java.time.LocalDateTime.now());
+            request.addHistory("REQUEST_CREATED", "Request created and auto-approved for SUPER_ADMIN", currentEmployee);
+            request.addHistory("REQUEST_APPROVED", "Auto-approved for SUPER_ADMIN", currentEmployee);
+        } else {
+            request.setStatus(StationeryRequest.Status.SUBMITTED);
+            request.addHistory("REQUEST_CREATED", "Request created", currentEmployee);
+        }
 
         StationeryRequest savedRequest = requestRepository.save(request);
 
+        // Update stock if auto-approved
+        if (currentEmployee.getRole() == Role.SUPER_ADMIN) {
+            updateStock(savedRequest);
+        }
+
         // Send notifications
-        notificationService.sendRequestCreatedNotification(savedRequest);
+        if (currentEmployee.getRole() == Role.SUPER_ADMIN) {
+            notificationService.sendRequestApprovedNotification(savedRequest);
+        } else {
+            notificationService.sendRequestCreatedNotification(savedRequest);
+        }
 
         return mapToDto(savedRequest);
     }
@@ -98,7 +116,7 @@ public class StationeryRequestService {
         // Both Manager and Super Admin can see all requests
         if (currentEmployee.getRole() == Employee.Role.MANAGER || 
             currentEmployee.getRole() == Employee.Role.SUPER_ADMIN) {
-            return requestRepository.findAll(pageable).map(this::mapToDto);
+            return requestRepository.findAllOrderByCreatedAtDesc(pageable).map(this::mapToDto);
         }
 
         throw new RuntimeException("Only Manager and Super Admin can view all requests");
@@ -111,7 +129,7 @@ public class StationeryRequestService {
         // Both Manager and Super Admin can see all requests for approval
         if (currentEmployee.getRole() == Employee.Role.MANAGER || 
             currentEmployee.getRole() == Employee.Role.SUPER_ADMIN) {
-            return requestRepository.findAll(pageable).map(this::mapToDto);
+            return requestRepository.findAllOrderByCreatedAtDesc(pageable).map(this::mapToDto);
         }
 
         // Other roles can only see requests assigned to them
@@ -261,6 +279,11 @@ public class StationeryRequestService {
     }
 
     private Employee findApprover(Employee employee) {
+        // SUPER_ADMIN doesn't need approval from superior
+        if (employee.getRole() == Role.SUPER_ADMIN) {
+            return employee; // Self-approval for SUPER_ADMIN
+        }
+        
         if (employee.getSuperiorEmployeeNo() == null) {
             throw new RuntimeException("No superior found for approval");
         }

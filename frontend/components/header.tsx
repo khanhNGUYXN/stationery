@@ -1,5 +1,6 @@
 'use client'
 
+import React from 'react'
 import { useAuth } from '@/hooks/use-auth'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
@@ -17,6 +18,7 @@ interface HeaderProps {
   showBackButton?: boolean
   backUrl?: string
   showHomeButton?: boolean
+  actionButton?: React.ReactNode
 }
 
 export function Header({ 
@@ -24,7 +26,8 @@ export function Header({
   subtitle, 
   showBackButton = false, 
   backUrl = '/dashboard',
-  showHomeButton = false 
+  showHomeButton = false,
+  actionButton
 }: HeaderProps) {
   const { user, logout } = useAuth()
   const router = useRouter()
@@ -76,6 +79,8 @@ export function Header({
       
       {/* User Info and Logout */}
       <div className="flex items-center gap-4">
+        {actionButton}
+        
         <Card className="p-3">
           <div className="flex items-center gap-3">
             <div className="p-2 bg-blue-100 rounded-full">

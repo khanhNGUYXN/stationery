@@ -1,8 +1,9 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import Cookies from 'js-cookie';
+import { useAuth } from '@/hooks/use-auth';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -18,7 +19,9 @@ import {
   Eye,
   Tag,
   DollarSign,
-  Box
+  Box,
+  Plus,
+  X
 } from 'lucide-react';
 
 interface Stationery {
@@ -38,11 +41,20 @@ interface Stationery {
 
 export default function StationeryPage() {
   const router = useRouter();
+  const { user } = useAuth();
   const [stationeries, setStationeries] = useState<Stationery[]>([]);
-  const [filteredStationeries, setFilteredStationeries] = useState<Stationery[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('all');
   const [loading, setLoading] = useState(true);
+  const [showAdvancedFilter, setShowAdvancedFilter] = useState(false);
+  const [advancedFilters, setAdvancedFilters] = useState({
+    minPrice: '',
+    maxPrice: '',
+    minStock: '',
+    maxStock: '',
+    brand: '',
+    inStock: 'all'
+  });
   const [notification, setNotification] = useState<{
     isOpen: boolean;
     type: 'success' | 'error' | 'warning' | 'info';
@@ -104,7 +116,6 @@ export default function StationeryPage() {
         }));
 
         setStationeries(transformedStationeries);
-        setFilteredStationeries(transformedStationeries);
         setLoading(false);
       } catch (error) {
         console.error('Error fetching stationeries:', error);
@@ -125,7 +136,8 @@ export default function StationeryPage() {
 
   const categories = ['all', 'Writing', 'Paper', 'Office Supplies'];
 
-  useEffect(() => {
+  // Filter stationeries based on search term and category
+  const filteredStationeries = useMemo(() => {
     let filtered = stationeries;
 
     // Filter by search term
@@ -133,8 +145,8 @@ export default function StationeryPage() {
       filtered = filtered.filter(item =>
         item.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
         item.code.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        item.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        item.tags.some(tag => tag.toLowerCase().includes(searchTerm.toLowerCase()))
+        (item.description && item.description.toLowerCase().includes(searchTerm.toLowerCase())) ||
+        (item.tags && item.tags.some(tag => tag.toLowerCase().includes(searchTerm.toLowerCase())))
       );
     }
 
@@ -143,8 +155,32 @@ export default function StationeryPage() {
       filtered = filtered.filter(item => item.category === selectedCategory);
     }
 
-    setFilteredStationeries(filtered);
-  }, [searchTerm, selectedCategory, stationeries]);
+    // Advanced filters
+    if (advancedFilters.minPrice) {
+      filtered = filtered.filter(item => item.cost >= parseFloat(advancedFilters.minPrice));
+    }
+    if (advancedFilters.maxPrice) {
+      filtered = filtered.filter(item => item.cost <= parseFloat(advancedFilters.maxPrice));
+    }
+    if (advancedFilters.minStock) {
+      filtered = filtered.filter(item => item.stockQuantity >= parseInt(advancedFilters.minStock));
+    }
+    if (advancedFilters.maxStock) {
+      filtered = filtered.filter(item => item.stockQuantity <= parseInt(advancedFilters.maxStock));
+    }
+    if (advancedFilters.brand) {
+      filtered = filtered.filter(item => 
+        item.brand && item.brand.toLowerCase().includes(advancedFilters.brand.toLowerCase())
+      );
+    }
+    if (advancedFilters.inStock === 'inStock') {
+      filtered = filtered.filter(item => item.stockQuantity > 0);
+    } else if (advancedFilters.inStock === 'outOfStock') {
+      filtered = filtered.filter(item => item.stockQuantity === 0);
+    }
+
+    return filtered;
+  }, [searchTerm, selectedCategory, stationeries, advancedFilters.minPrice, advancedFilters.maxPrice, advancedFilters.minStock, advancedFilters.maxStock, advancedFilters.brand, advancedFilters.inStock]);
 
   const getStockStatus = (quantity: number, minimum: number) => {
     if (quantity === 0) return { status: 'out', text: 'Hết hàng', color: 'text-red-500' };
@@ -181,6 +217,17 @@ export default function StationeryPage() {
             title="Văn phòng phẩm"
             subtitle="Tìm kiếm và yêu cầu văn phòng phẩm cần thiết"
             showHomeButton={true}
+            actionButton={
+              (user?.role === 'MANAGER' || user?.role === 'SUPER_ADMIN') && (
+                <Button 
+                  onClick={() => router.push('/stationery/new')}
+                  className="flex items-center gap-2"
+                >
+                  <Plus className="w-4 h-4" />
+                  Thêm sản phẩm
+                </Button>
+              )
+            }
           />
 
           {/* Search and Filter */}
@@ -223,7 +270,11 @@ export default function StationeryPage() {
                   </select>
                 </div>
                 <div className="flex items-end">
-                  <Button variant="outline" className="w-full">
+                  <Button 
+                    variant="outline" 
+                    className="w-full"
+                    onClick={() => setShowAdvancedFilter(true)}
+                  >
                     <Filter className="w-4 h-4 mr-2" />
                     Lọc nâng cao
                   </Button>
@@ -342,6 +393,146 @@ export default function StationeryPage() {
             </Card>
           )}
         </div>
+
+        {/* Advanced Filter Modal */}
+        {showAdvancedFilter && (
+          <div 
+            className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50"
+            onClick={() => setShowAdvancedFilter(false)}
+          >
+            <div 
+              className="bg-white rounded-lg p-6 w-full max-w-md mx-4"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="flex justify-between items-center mb-4">
+                <h3 className="text-lg font-semibold">Lọc nâng cao</h3>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setShowAdvancedFilter(false)}
+                >
+                  <X className="w-4 h-4" />
+                </Button>
+              </div>
+              
+              <div className="space-y-4">
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <Label htmlFor="minPrice">Giá tối thiểu (VNĐ)</Label>
+                    <Input
+                      id="minPrice"
+                      type="number"
+                      value={advancedFilters.minPrice}
+                      onChange={(e) => setAdvancedFilters(prev => ({
+                        ...prev,
+                        minPrice: e.target.value
+                      }))}
+                      placeholder="0"
+                      min="0"
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="maxPrice">Giá tối đa (VNĐ)</Label>
+                    <Input
+                      id="maxPrice"
+                      type="number"
+                      value={advancedFilters.maxPrice}
+                      onChange={(e) => setAdvancedFilters(prev => ({
+                        ...prev,
+                        maxPrice: e.target.value
+                      }))}
+                      placeholder="0"
+                      min="0"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <Label htmlFor="minStock">Tồn kho tối thiểu</Label>
+                    <Input
+                      id="minStock"
+                      type="number"
+                      value={advancedFilters.minStock}
+                      onChange={(e) => setAdvancedFilters(prev => ({
+                        ...prev,
+                        minStock: e.target.value
+                      }))}
+                      placeholder="0"
+                      min="0"
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="maxStock">Tồn kho tối đa</Label>
+                    <Input
+                      id="maxStock"
+                      type="number"
+                      value={advancedFilters.maxStock}
+                      onChange={(e) => setAdvancedFilters(prev => ({
+                        ...prev,
+                        maxStock: e.target.value
+                      }))}
+                      placeholder="0"
+                      min="0"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <Label htmlFor="brand">Thương hiệu</Label>
+                  <Input
+                    id="brand"
+                    value={advancedFilters.brand}
+                    onChange={(e) => setAdvancedFilters(prev => ({
+                      ...prev,
+                      brand: e.target.value
+                    }))}
+                    placeholder="Nhập tên thương hiệu..."
+                  />
+                </div>
+
+                <div>
+                  <Label htmlFor="inStock">Tình trạng tồn kho</Label>
+                  <select
+                    id="inStock"
+                    value={advancedFilters.inStock}
+                    onChange={(e) => setAdvancedFilters(prev => ({
+                      ...prev,
+                      inStock: e.target.value
+                    }))}
+                    className="w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    aria-label="Chọn tình trạng tồn kho"
+                  >
+                    <option value="all">Tất cả</option>
+                    <option value="inStock">Còn hàng</option>
+                    <option value="outOfStock">Hết hàng</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="flex justify-end gap-2 mt-6">
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    setAdvancedFilters({
+                      minPrice: '',
+                      maxPrice: '',
+                      minStock: '',
+                      maxStock: '',
+                      brand: '',
+                      inStock: 'all'
+                    });
+                  }}
+                >
+                  Xóa bộ lọc
+                </Button>
+                <Button onClick={() => setShowAdvancedFilter(false)}>
+                  Áp dụng
+                </Button>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Notification Popup */}
         <NotificationPopup

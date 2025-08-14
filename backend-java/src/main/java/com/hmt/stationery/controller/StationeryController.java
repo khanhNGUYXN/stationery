@@ -9,6 +9,7 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import jakarta.validation.Valid;
 import java.util.List;
 
 @RestController
@@ -55,5 +56,25 @@ public class StationeryController {
     public ResponseEntity<List<StationeryDto>> getLowStockItems() {
         List<StationeryDto> lowStockItems = stationeryService.getLowStockItems();
         return ResponseEntity.ok(lowStockItems);
+    }
+
+    @PostMapping
+    public ResponseEntity<StationeryDto> createStationery(@Valid @RequestBody StationeryDto.CreateRequest request) {
+        StationeryDto stationery = stationeryService.createStationery(request);
+        return ResponseEntity.ok(stationery);
+    }
+
+    @PutMapping("/{id}")
+    public ResponseEntity<StationeryDto> updateStationery(
+            @PathVariable Long id, 
+            @Valid @RequestBody StationeryDto.UpdateRequest request) {
+        StationeryDto stationery = stationeryService.updateStationery(id, request);
+        return ResponseEntity.ok(stationery);
+    }
+
+    @DeleteMapping("/{id}")
+    public ResponseEntity<Void> deleteStationery(@PathVariable Long id) {
+        stationeryService.deleteStationery(id);
+        return ResponseEntity.ok().build();
     }
 }

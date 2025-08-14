@@ -72,6 +72,9 @@ public class SecurityConfig {
                         .permitAll()
                         .requestMatchers("/auth/users/**").hasRole("SUPER_ADMIN")
                         .requestMatchers("/auth/profile", "/auth/change-password").authenticated()
+                        .requestMatchers(HttpMethod.POST, "/stationeries/**").hasAnyRole("MANAGER", "SUPER_ADMIN")
+                        .requestMatchers(HttpMethod.PUT, "/stationeries/**").hasAnyRole("MANAGER", "SUPER_ADMIN")
+                        .requestMatchers(HttpMethod.DELETE, "/stationeries/**").hasAnyRole("MANAGER", "SUPER_ADMIN")
                         .anyRequest().authenticated());
         return http.build();
     }
