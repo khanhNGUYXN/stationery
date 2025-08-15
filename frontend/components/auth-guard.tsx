@@ -16,7 +16,7 @@ export function AuthGuard({ children }: AuthGuardProps) {
     if (!isLoading && !isAuthenticated) {
       router.push('/')
     }
-  }, [isLoading, isAuthenticated, router])
+  }, [isLoading, isAuthenticated, router, user])
 
   if (isLoading) {
     return (

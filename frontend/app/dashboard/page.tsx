@@ -162,7 +162,6 @@ export default function DashboardPage() {
           });
         }
       } catch (error) {
-        console.error('Error fetching stats:', error);
         setNotification({
           isOpen: true,
           type: 'error',

@@ -38,15 +38,8 @@ public class StationeryRequest {
     @JoinColumn(name = "requester_id", nullable = false)
     private Employee requester;
 
-    @NotNull
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "stationery_id", nullable = false)
-    private Stationery stationery;
-
-    @NotNull
-    @Positive
-    @Column(name = "quantity", nullable = false)
-    private Integer quantity;
+    @OneToMany(mappedBy = "request", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.LAZY)
+    private List<RequestItem> items = new ArrayList<>();
 
     @NotNull
     @Column(name = "to_date", nullable = false)
@@ -70,8 +63,11 @@ public class StationeryRequest {
     @Column(name = "rejection_reason", columnDefinition = "TEXT")
     private String rejectionReason;
 
-    @Column(name = "total_cost", precision = 10, scale = 2)
-    private BigDecimal totalCost;
+    @Column(name = "total_amount", precision = 10, scale = 2, nullable = false)
+    private BigDecimal totalAmount = BigDecimal.ZERO;
+
+    @Column(name = "item_count", nullable = false)
+    private Integer itemCount = 0;
 
     @OneToMany(mappedBy = "request", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<RequestHistory> history = new ArrayList<>();

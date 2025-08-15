@@ -23,8 +23,8 @@ public class NotificationService {
             Notification notification = new Notification();
             notification.setRecipient(request.getApprover());
             notification.setTitle("New Stationery Request");
-            notification.setMessage(String.format("You have a new stationery request from %s for %s",
-                    request.getRequester().getName(), request.getStationery().getName()));
+            notification.setMessage(String.format("You have a new stationery request from %s for %d items",
+                    request.getRequester().getName(), request.getItemCount()));
             notification.setType(Notification.Type.REQUEST_CREATED);
             notification.setRelatedEntityType("StationeryRequest");
             notification.setRelatedEntityId(request.getId());
@@ -44,8 +44,8 @@ public class NotificationService {
             Notification notification = new Notification();
             notification.setRecipient(request.getRequester());
             notification.setTitle("Request Approved");
-            notification.setMessage(String.format("Your request for %s has been approved",
-                    request.getStationery().getName()));
+            notification.setMessage(String.format("Your request for %d items has been approved",
+                    request.getItemCount()));
             notification.setType(Notification.Type.REQUEST_APPROVED);
             notification.setRelatedEntityType("StationeryRequest");
             notification.setRelatedEntityId(request.getId());
@@ -64,8 +64,8 @@ public class NotificationService {
             Notification notification = new Notification();
             notification.setRecipient(request.getRequester());
             notification.setTitle("Request Rejected");
-            notification.setMessage(String.format("Your request for %s has been rejected. Reason: %s",
-                    request.getStationery().getName(), request.getRejectionReason()));
+            notification.setMessage(String.format("Your request for %d items has been rejected. Reason: %s",
+                    request.getItemCount(), request.getRejectionReason()));
             notification.setType(Notification.Type.REQUEST_REJECTED);
             notification.setRelatedEntityType("StationeryRequest");
             notification.setRelatedEntityId(request.getId());
@@ -84,8 +84,8 @@ public class NotificationService {
             Notification notification = new Notification();
             notification.setRecipient(request.getApprover());
             notification.setTitle("Request Withdrawn");
-            notification.setMessage(String.format("Request for %s has been withdrawn by %s",
-                    request.getStationery().getName(), request.getRequester().getName()));
+            notification.setMessage(String.format("Request for %d items has been withdrawn by %s",
+                    request.getItemCount(), request.getRequester().getName()));
             notification.setType(Notification.Type.REQUEST_WITHDRAWN);
             notification.setRelatedEntityType("StationeryRequest");
             notification.setRelatedEntityId(request.getId());
@@ -104,8 +104,8 @@ public class NotificationService {
             Notification notification = new Notification();
             notification.setRecipient(request.getApprover());
             notification.setTitle("Cancellation Request");
-            notification.setMessage(String.format("Cancellation request for %s from %s",
-                    request.getStationery().getName(), request.getRequester().getName()));
+            notification.setMessage(String.format("Cancellation request for %d items from %s",
+                    request.getItemCount(), request.getRequester().getName()));
             notification.setType(Notification.Type.REQUEST_CANCELED);
             notification.setRelatedEntityType("StationeryRequest");
             notification.setRelatedEntityId(request.getId());
@@ -114,6 +114,26 @@ public class NotificationService {
             log.info("Cancellation request notification sent to {}", request.getApprover().getEmail());
         } catch (Exception e) {
             log.error("Failed to send cancellation request notification", e);
+        }
+    }
+
+    @Transactional
+    public void sendRequestCanceledNotification(StationeryRequest request) {
+        try {
+            // Notify approver that request was canceled
+            Notification notification = new Notification();
+            notification.setRecipient(request.getApprover());
+            notification.setTitle("Request Canceled");
+            notification.setMessage(String.format("Request for %d items has been canceled by %s. Reason: %s",
+                    request.getItemCount(), request.getRequester().getName(), request.getRejectionReason()));
+            notification.setType(Notification.Type.REQUEST_CANCELED);
+            notification.setRelatedEntityType("StationeryRequest");
+            notification.setRelatedEntityId(request.getId());
+
+            notificationRepository.save(notification);
+            log.info("Request canceled notification sent to {}", request.getApprover().getEmail());
+        } catch (Exception e) {
+            log.error("Failed to send request canceled notification", e);
         }
     }
 

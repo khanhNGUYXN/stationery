@@ -4,7 +4,9 @@ import com.hmt.stationery.domain.Employee;
 import com.hmt.stationery.domain.Employee.Role;
 import com.hmt.stationery.domain.Stationery;
 import com.hmt.stationery.domain.StationeryRequest;
+import com.hmt.stationery.domain.RequestItem;
 import com.hmt.stationery.dto.StationeryRequestDto;
+import com.hmt.stationery.dto.RequestItemDto;
 import com.hmt.stationery.repository.EmployeeRepository;
 import com.hmt.stationery.repository.StationeryRepository;
 import com.hmt.stationery.repository.StationeryRequestRepository;
@@ -34,23 +36,56 @@ public class StationeryRequestService {
     @Transactional
     public StationeryRequestDto createRequest(StationeryRequestDto.CreateRequest createRequest) {
         Employee currentEmployee = authService.getCurrentEmployee();
-        Stationery stationery = stationeryRepository.findById(createRequest.getStationeryId())
-                .orElseThrow(() -> new RuntimeException("Stationery not found"));
 
-        // Validate eligibility
-        validateEligibility(currentEmployee, stationery, createRequest.getQuantity());
+        // Validate items
+        if (createRequest.getItems() == null || createRequest.getItems().isEmpty()) {
+            throw new RuntimeException("Vui lòng chọn ít nhất một sản phẩm");
+        }
+
+        if (createRequest.getToDate() == null) {
+            throw new RuntimeException("Vui lòng chọn ngày cần");
+        }
+
+        if (createRequest.getReason() == null || createRequest.getReason().trim().isEmpty()) {
+            throw new RuntimeException("Vui lòng nhập lý do yêu cầu");
+        }
 
         // Find approver (superior)
         Employee approver = findApprover(currentEmployee);
 
         StationeryRequest request = new StationeryRequest();
         request.setRequester(currentEmployee);
-        request.setStationery(stationery);
-        request.setQuantity(createRequest.getQuantity());
         request.setToDate(createRequest.getToDate());
         request.setReason(createRequest.getReason());
         request.setApprover(approver);
-        request.setTotalCost(stationery.getCost().multiply(BigDecimal.valueOf(createRequest.getQuantity())));
+
+        BigDecimal totalAmount = BigDecimal.ZERO;
+        int itemCount = 0;
+
+        // Process each item
+        for (RequestItemDto.CreateRequest itemRequest : createRequest.getItems()) {
+            Stationery stationery = stationeryRepository.findById(itemRequest.getStationeryId())
+                    .orElseThrow(() -> new RuntimeException(
+                            "Không tìm thấy sản phẩm với ID: " + itemRequest.getStationeryId()));
+
+            // Validate eligibility
+            validateEligibility(currentEmployee, stationery, itemRequest.getQuantity());
+
+            // Create request item
+            RequestItem item = new RequestItem();
+            item.setRequest(request);
+            item.setStationery(stationery);
+            item.setQuantity(itemRequest.getQuantity());
+            item.setUnitCost(stationery.getCost());
+            item.setTotalCost(stationery.getCost().multiply(BigDecimal.valueOf(itemRequest.getQuantity())));
+
+            request.getItems().add(item);
+            totalAmount = totalAmount.add(item.getTotalCost());
+            itemCount++;
+        }
+
+        request.setTotalAmount(totalAmount);
+        request.setItemCount(itemCount);
 
         // Auto approve for SUPER_ADMIN
         if (currentEmployee.getRole() == Role.SUPER_ADMIN) {
@@ -98,8 +133,8 @@ public class StationeryRequestService {
         Employee currentEmployee = authService.getCurrentEmployee();
 
         // Both Manager and Super Admin can see all pending requests
-        if (currentEmployee.getRole() == Employee.Role.MANAGER || 
-            currentEmployee.getRole() == Employee.Role.SUPER_ADMIN) {
+        if (currentEmployee.getRole() == Employee.Role.MANAGER ||
+                currentEmployee.getRole() == Employee.Role.SUPER_ADMIN) {
             return requestRepository.findPendingApprovalsForSuperAdmin(pageable)
                     .map(this::mapToDto);
         }
@@ -114,8 +149,8 @@ public class StationeryRequestService {
         Employee currentEmployee = authService.getCurrentEmployee();
 
         // Both Manager and Super Admin can see all requests
-        if (currentEmployee.getRole() == Employee.Role.MANAGER || 
-            currentEmployee.getRole() == Employee.Role.SUPER_ADMIN) {
+        if (currentEmployee.getRole() == Employee.Role.MANAGER ||
+                currentEmployee.getRole() == Employee.Role.SUPER_ADMIN) {
             return requestRepository.findAllOrderByCreatedAtDesc(pageable).map(this::mapToDto);
         }
 
@@ -127,8 +162,8 @@ public class StationeryRequestService {
         Employee currentEmployee = authService.getCurrentEmployee();
 
         // Both Manager and Super Admin can see all requests for approval
-        if (currentEmployee.getRole() == Employee.Role.MANAGER || 
-            currentEmployee.getRole() == Employee.Role.SUPER_ADMIN) {
+        if (currentEmployee.getRole() == Employee.Role.MANAGER ||
+                currentEmployee.getRole() == Employee.Role.SUPER_ADMIN) {
             return requestRepository.findAllOrderByCreatedAtDesc(pageable).map(this::mapToDto);
         }
 
@@ -144,8 +179,8 @@ public class StationeryRequestService {
                 .orElseThrow(() -> new RuntimeException("Request not found"));
 
         // Both Manager and Super Admin can approve any request
-        boolean canApprove = (currentEmployee.getRole() == Employee.Role.MANAGER || 
-                             currentEmployee.getRole() == Employee.Role.SUPER_ADMIN) ||
+        boolean canApprove = (currentEmployee.getRole() == Employee.Role.MANAGER ||
+                currentEmployee.getRole() == Employee.Role.SUPER_ADMIN) ||
                 request.getApprover().getId().equals(currentEmployee.getId());
 
         if (!canApprove) {
@@ -178,8 +213,8 @@ public class StationeryRequestService {
                 .orElseThrow(() -> new RuntimeException("Request not found"));
 
         // Both Manager and Super Admin can reject any request
-        boolean canReject = (currentEmployee.getRole() == Employee.Role.MANAGER || 
-                            currentEmployee.getRole() == Employee.Role.SUPER_ADMIN) ||
+        boolean canReject = (currentEmployee.getRole() == Employee.Role.MANAGER ||
+                currentEmployee.getRole() == Employee.Role.SUPER_ADMIN) ||
                 request.getApprover().getId().equals(currentEmployee.getId());
 
         if (!canReject) {
@@ -241,16 +276,18 @@ public class StationeryRequestService {
             throw new RuntimeException("Request must be approved to be cancelled");
         }
 
-        // For cancellation after approval, need superior approval
-        Employee superior = findApprover(currentEmployee);
-        request.setApprover(superior);
-        request.setStatus(StationeryRequest.Status.SUBMITTED);
-        request.addHistory("REQUEST_CANCELLATION_REQUESTED", reason, currentEmployee);
+        // Direct cancellation - no need for approval
+        request.setStatus(StationeryRequest.Status.CANCELED);
+        request.setRejectionReason(reason);
+        request.addHistory("REQUEST_CANCELED", reason, currentEmployee);
+
+        // Restore stock if request was approved
+        restoreStock(request);
 
         StationeryRequest savedRequest = requestRepository.save(request);
 
         // Send notifications
-        notificationService.sendCancellationRequestNotification(savedRequest);
+        notificationService.sendRequestCanceledNotification(savedRequest);
 
         return mapToDto(savedRequest);
     }
@@ -265,7 +302,11 @@ public class StationeryRequestService {
     private void validateEligibility(Employee employee, Stationery stationery, Integer quantity) {
         // Check stock availability
         if (stationery.getStockQuantity() < quantity) {
-            throw new RuntimeException("Insufficient stock");
+            throw new RuntimeException(String.format(
+                    "Không đủ hàng trong kho. Sản phẩm '%s' chỉ còn %d trong kho, bạn yêu cầu %d",
+                    stationery.getName(),
+                    stationery.getStockQuantity(),
+                    quantity));
         }
 
         // Check spending limits
@@ -274,7 +315,10 @@ public class StationeryRequestService {
 
         // This would need to be enhanced with actual threshold checking
         if (monthlySpent.add(totalCost).compareTo(BigDecimal.valueOf(1000)) > 0) {
-            throw new RuntimeException("Monthly spending limit exceeded");
+            throw new RuntimeException(String.format(
+                    "Vượt quá giới hạn chi tiêu hàng tháng. Đã chi: %s VNĐ, yêu cầu thêm: %s VNĐ, giới hạn: 1,000 VNĐ",
+                    monthlySpent.toPlainString(),
+                    totalCost.toPlainString()));
         }
     }
 
@@ -283,19 +327,31 @@ public class StationeryRequestService {
         if (employee.getRole() == Role.SUPER_ADMIN) {
             return employee; // Self-approval for SUPER_ADMIN
         }
-        
+
         if (employee.getSuperiorEmployeeNo() == null) {
-            throw new RuntimeException("No superior found for approval");
+            throw new RuntimeException(
+                    "Không tìm thấy người phê duyệt cho tài khoản của bạn. Vui lòng liên hệ quản trị viên.");
         }
 
         return employeeRepository.findByEmployeeNo(employee.getSuperiorEmployeeNo())
-                .orElseThrow(() -> new RuntimeException("Superior not found"));
+                .orElseThrow(() -> new RuntimeException(
+                        "Không tìm thấy người phê duyệt với mã nhân viên: " + employee.getSuperiorEmployeeNo()));
     }
 
     private void updateStock(StationeryRequest request) {
-        Stationery stationery = request.getStationery();
-        stationery.setStockQuantity(stationery.getStockQuantity() - request.getQuantity());
-        stationeryRepository.save(stationery);
+        for (RequestItem item : request.getItems()) {
+            Stationery stationery = item.getStationery();
+            stationery.setStockQuantity(stationery.getStockQuantity() - item.getQuantity());
+            stationeryRepository.save(stationery);
+        }
+    }
+
+    private void restoreStock(StationeryRequest request) {
+        for (RequestItem item : request.getItems()) {
+            Stationery stationery = item.getStationery();
+            stationery.setStockQuantity(stationery.getStockQuantity() + item.getQuantity());
+            stationeryRepository.save(stationery);
+        }
     }
 
     private StationeryRequestDto mapToDto(StationeryRequest request) {
@@ -304,15 +360,17 @@ public class StationeryRequestService {
             dto.setId(request.getId());
             dto.setRequestNumber(request.getRequestNumber());
             dto.setRequester(request.getRequester() != null ? mapToEmployeeDto(request.getRequester()) : null);
-            dto.setStationery(request.getStationery() != null ? mapToStationeryDto(request.getStationery()) : null);
-            dto.setQuantity(request.getQuantity());
+            dto.setItems(request.getItems() != null ? request.getItems().stream()
+                    .map(this::mapToRequestItemDto)
+                    .toList() : new ArrayList<>());
             dto.setToDate(request.getToDate());
             dto.setReason(request.getReason());
             dto.setStatus(request.getStatus());
             dto.setApprover(request.getApprover() != null ? mapToEmployeeDto(request.getApprover()) : null);
             dto.setApprovedAt(request.getApprovedAt());
             dto.setRejectionReason(request.getRejectionReason());
-            dto.setTotalCost(request.getTotalCost());
+            dto.setTotalAmount(request.getTotalAmount());
+            dto.setItemCount(request.getItemCount());
             dto.setCreatedAt(request.getCreatedAt());
             dto.setUpdatedAt(request.getUpdatedAt());
             dto.setHistory(request.getHistory() != null ? request.getHistory().stream()
@@ -335,12 +393,15 @@ public class StationeryRequestService {
         return dto;
     }
 
-    private StationeryRequestDto.StationeryDto mapToStationeryDto(Stationery stationery) {
-        StationeryRequestDto.StationeryDto dto = new StationeryRequestDto.StationeryDto();
-        dto.setId(stationery.getId());
-        dto.setCode(stationery.getCode());
-        dto.setName(stationery.getName());
-        dto.setImageUrl(stationery.getImageUrl());
+    private RequestItemDto mapToRequestItemDto(RequestItem item) {
+        RequestItemDto dto = new RequestItemDto();
+        dto.setId(item.getId());
+        dto.setStationeryId(item.getStationery().getId());
+        dto.setStationeryName(item.getStationery().getName());
+        dto.setStationeryCode(item.getStationery().getCode());
+        dto.setQuantity(item.getQuantity());
+        dto.setUnitCost(item.getUnitCost());
+        dto.setTotalCost(item.getTotalCost());
         return dto;
     }
 

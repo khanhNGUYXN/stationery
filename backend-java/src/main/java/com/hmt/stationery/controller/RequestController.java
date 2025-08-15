@@ -20,8 +20,22 @@ public class RequestController {
     @PostMapping
     public ResponseEntity<StationeryRequestDto> createRequest(
             @RequestBody StationeryRequestDto.CreateRequest createRequest) {
-        StationeryRequestDto request = requestService.createRequest(createRequest);
-        return ResponseEntity.ok(request);
+        try {
+            StationeryRequestDto request = requestService.createRequest(createRequest);
+            return ResponseEntity.ok(request);
+        } catch (RuntimeException e) {
+            log.error("Error creating request: {}", e.getMessage());
+            return ResponseEntity.badRequest()
+                    .body(StationeryRequestDto.builder()
+                            .errorMessage(e.getMessage())
+                            .build());
+        } catch (Exception e) {
+            log.error("Unexpected error creating request", e);
+            return ResponseEntity.internalServerError()
+                    .body(StationeryRequestDto.builder()
+                            .errorMessage("Có lỗi xảy ra khi tạo yêu cầu: " + e.getMessage())
+                            .build());
+        }
     }
 
     @GetMapping

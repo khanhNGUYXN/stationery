@@ -42,6 +42,7 @@ interface Request {
   rejectionReason?: string;
   requesterRole: string;
   requesterDepartment: string;
+  items?: any[];
 }
 
 export default function ApprovalPage() {
@@ -74,7 +75,14 @@ export default function ApprovalPage() {
       try {
         const token = localStorage.getItem('token') || Cookies.get('token');
         if (!token) {
-          console.error('No token found');
+          setNotification({
+            isOpen: true,
+            type: 'error',
+            title: 'Lỗi đăng nhập',
+            message: 'Không tìm thấy token đăng nhập. Vui lòng đăng nhập lại.',
+            actionText: 'Đăng nhập',
+            onAction: () => router.push('/')
+          });
           return;
         }
 
@@ -90,7 +98,6 @@ export default function ApprovalPage() {
         }
 
         const data = await response.json();
-        console.log('Fetched requests:', data);
 
         // Transform API response to match our interface
         const transformedRequests: Request[] = data.content.map((item: any) => ({
@@ -98,10 +105,14 @@ export default function ApprovalPage() {
           requestNumber: item.requestNumber,
           requesterName: item.requester?.name || 'Unknown',
           requesterEmail: item.requester?.email || '',
-          stationeryName: item.stationery?.name || 'Unknown',
-          stationeryCode: item.stationery?.code || '',
-          quantity: item.quantity,
-          totalCost: item.totalCost || 0,
+          stationeryName: item.items && item.items.length > 0 ? 
+            item.items.length === 1 ? item.items[0].stationeryName : 
+            `${item.items.length} sản phẩm` : 'Unknown',
+          stationeryCode: item.items && item.items.length > 0 ? 
+            item.items.length === 1 ? item.items[0].stationeryCode : 
+            `${item.itemCount} items` : '',
+          quantity: item.items ? item.items.reduce((sum: number, item: any) => sum + item.quantity, 0) : 0,
+          totalCost: item.totalAmount || 0,
           status: item.status,
           toDate: item.toDate,
           reason: item.reason || '',
@@ -111,13 +122,21 @@ export default function ApprovalPage() {
           approvedAt: item.approvedAt,
           rejectionReason: item.rejectionReason,
           requesterRole: item.requester?.role || 'EMPLOYEE',
-          requesterDepartment: item.requester?.department || 'Unknown'
+          requesterDepartment: item.requester?.department || 'Unknown',
+          items: item.items || []
         }));
 
         setRequests(transformedRequests);
         setFilteredRequests(transformedRequests);
       } catch (error) {
-        console.error('Error fetching requests:', error);
+        setNotification({
+          isOpen: true,
+          type: 'error',
+          title: 'Lỗi tải dữ liệu',
+          message: 'Không thể tải danh sách yêu cầu. Vui lòng thử lại.',
+          actionText: 'Thử lại',
+          onAction: () => window.location.reload()
+        });
         // Fallback to mock data if API fails
         const mockData: Request[] = [
           {
@@ -418,12 +437,98 @@ export default function ApprovalPage() {
             </CardContent>
           </Card>
 
-          {/* Results Count */}
+          {/* Results Count and Stats */}
           <div className="mb-6">
-            <p className="text-gray-600">
-              Tìm thấy <span className="font-semibold">{filteredRequests.length}</span> yêu cầu
-            </p>
+            <div className="flex justify-between items-center">
+              <p className="text-gray-600">
+                Tìm thấy <span className="font-semibold">{filteredRequests.length}</span> yêu cầu
+              </p>
+              
+              {/* Stats */}
+              <div className="flex gap-4 text-sm">
+                <div className="flex items-center gap-2">
+                  <div className="w-3 h-3 bg-blue-500 rounded-full"></div>
+                  <span>Chờ phê duyệt: {requests.filter(r => r.status === 'SUBMITTED').length}</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <div className="w-3 h-3 bg-green-500 rounded-full"></div>
+                  <span>Đã phê duyệt: {requests.filter(r => r.status === 'APPROVED').length}</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <div className="w-3 h-3 bg-red-500 rounded-full"></div>
+                  <span>Từ chối: {requests.filter(r => r.status === 'REJECTED').length}</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <div className="w-3 h-3 bg-orange-500 rounded-full"></div>
+                  <span>Đã hủy: {requests.filter(r => r.status === 'CANCELED').length}</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <div className="w-3 h-3 bg-purple-500 rounded-full"></div>
+                  <span>Rút lại: {requests.filter(r => r.status === 'WITHDRAWN').length}</span>
+                </div>
+              </div>
+            </div>
           </div>
+
+          {/* Canceled Requests Section */}
+          {selectedStatus === 'all' && requests.filter(r => r.status === 'CANCELED').length > 0 && (
+            <div className="mb-8">
+              <div className="flex items-center gap-2 mb-4">
+                <div className="w-4 h-4 bg-orange-500 rounded-full"></div>
+                <h2 className="text-lg font-semibold text-gray-900">Yêu cầu đã hủy</h2>
+                <Badge className="bg-orange-100 text-orange-800">
+                  {requests.filter(r => r.status === 'CANCELED').length}
+                </Badge>
+              </div>
+              
+              <div className="space-y-3">
+                {requests.filter(r => r.status === 'CANCELED').slice(0, 3).map((request) => (
+                  <Card key={request.id} className="border-orange-200 bg-orange-50">
+                    <CardContent className="p-4">
+                      <div className="flex justify-between items-start">
+                        <div className="flex-1">
+                          <div className="flex items-center gap-2 mb-2">
+                            <h4 className="font-medium">{request.requestNumber}</h4>
+                            <Badge className="bg-orange-100 text-orange-800 text-xs">
+                              Đã hủy
+                            </Badge>
+                          </div>
+                          <p className="text-sm text-gray-600 mb-2">
+                            <strong>{request.requesterName}</strong> • {request.stationeryName} • {formatCurrency(request.totalCost)}
+                          </p>
+                          {request.rejectionReason && (
+                            <div className="p-2 bg-white border border-orange-200 rounded text-xs">
+                              <strong>Lý do hủy:</strong> {request.rejectionReason}
+                            </div>
+                          )}
+                        </div>
+                        <Button 
+                          variant="outline" 
+                          size="sm"
+                          onClick={() => handleViewDetail(request)}
+                        >
+                          <Eye className="w-3 h-3 mr-1" />
+                          Chi tiết
+                        </Button>
+                      </div>
+                    </CardContent>
+                  </Card>
+                ))}
+                
+                {requests.filter(r => r.status === 'CANCELED').length > 3 && (
+                  <div className="text-center">
+                    <Button 
+                      variant="outline" 
+                      size="sm"
+                      onClick={() => setSelectedStatus('CANCELED')}
+                    >
+                      Xem tất cả {requests.filter(r => r.status === 'CANCELED').length} yêu cầu đã hủy
+                    </Button>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
 
           {/* Requests List */}
           <div className="space-y-4">
@@ -452,6 +557,18 @@ export default function ApprovalPage() {
                           <p className="font-medium">{request.stationeryName}</p>
                           <p className="text-sm text-gray-500">{request.stationeryCode}</p>
                           <p className="text-sm text-gray-500">SL: {request.quantity} • {formatCurrency(request.totalCost)}</p>
+                          
+                          {request.items && request.items.length > 1 && (
+                            <div className="mt-2 p-2 bg-gray-50 rounded text-xs">
+                              <p className="font-medium mb-1">Chi tiết sản phẩm:</p>
+                              {request.items.map((item: any, index: number) => (
+                                <div key={index} className="flex justify-between">
+                                  <span>{item.stationeryName} ({item.quantity})</span>
+                                  <span>{formatCurrency(item.totalCost)}</span>
+                                </div>
+                              ))}
+                            </div>
+                          )}
                         </div>
                         <div>
                           <p className="text-sm text-gray-500">Thời gian</p>
@@ -469,6 +586,14 @@ export default function ApprovalPage() {
                         <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg">
                           <p className="text-sm text-red-600">
                             <strong>Lý do từ chối:</strong> {request.rejectionReason}
+                          </p>
+                        </div>
+                      )}
+
+                      {request.status === 'CANCELED' && request.rejectionReason && (
+                        <div className="mb-4 p-3 bg-orange-50 border border-orange-200 rounded-lg">
+                          <p className="text-sm text-orange-600">
+                            <strong>Lý do hủy:</strong> {request.rejectionReason}
                           </p>
                         </div>
                       )}

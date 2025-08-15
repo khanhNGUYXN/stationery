@@ -118,7 +118,6 @@ export default function StationeryPage() {
         setStationeries(transformedStationeries);
         setLoading(false);
       } catch (error) {
-        console.error('Error fetching stationeries:', error);
         setNotification({
           isOpen: true,
           type: 'error',

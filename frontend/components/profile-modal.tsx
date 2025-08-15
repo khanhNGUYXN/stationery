@@ -59,8 +59,7 @@ export function ProfileModal({ isOpen, onClose, user, onUpdate }: ProfileModalPr
         throw new Error('No authentication token')
       }
 
-      console.log('Sending profile update:', profileForm)
-      console.log('Token:', token.substring(0, 20) + '...')
+
 
       const response = await fetch(`http://localhost:8080/api/auth/profile`, {
         method: 'PUT',
@@ -71,12 +70,11 @@ export function ProfileModal({ isOpen, onClose, user, onUpdate }: ProfileModalPr
         body: JSON.stringify(profileForm),
       })
 
-      console.log('Response status:', response.status)
-      console.log('Response headers:', response.headers)
+      
 
       if (!response.ok) {
         const errorText = await response.text()
-        console.log('Error response:', errorText)
+        
         let errorMessage = 'Cập nhật thông tin thất bại'
         try {
           const errorData = JSON.parse(errorText)
@@ -88,7 +86,7 @@ export function ProfileModal({ isOpen, onClose, user, onUpdate }: ProfileModalPr
       }
 
       const updatedUserData = await response.json()
-      console.log('Updated user data:', updatedUserData)
+      
 
       // Update user data in auth context
       updateUser({

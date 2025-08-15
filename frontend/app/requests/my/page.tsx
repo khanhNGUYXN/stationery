@@ -6,6 +6,7 @@ import Cookies from 'js-cookie';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { useToast } from '@/hooks/use-toast';
 import { 
   ArrowLeft, 
   FileText, 
@@ -35,15 +36,23 @@ interface Request {
   approvedAt?: string;
   rejectionReason?: string;
   approverName?: string;
+  items?: any[];
 }
 
 export default function MyRequestsPage() {
   const router = useRouter();
+  const { toast } = useToast();
   const [requests, setRequests] = useState<Request[]>([]);
   const [filteredRequests, setFilteredRequests] = useState<Request[]>([]);
   const [selectedStatus, setSelectedStatus] = useState('all');
   const [searchTerm, setSearchTerm] = useState('');
   const [loading, setLoading] = useState(true);
+  
+  // Modal states
+  const [showWithdrawModal, setShowWithdrawModal] = useState(false);
+  const [showCancelModal, setShowCancelModal] = useState(false);
+  const [selectedRequestId, setSelectedRequestId] = useState<number | null>(null);
+  const [cancelReason, setCancelReason] = useState('');
 
   // Fetch real data from API
   useEffect(() => {
@@ -51,7 +60,11 @@ export default function MyRequestsPage() {
       try {
         const token = localStorage.getItem('token') || Cookies.get('token');
         if (!token) {
-          console.error('No token found');
+          toast({
+            title: "Lỗi",
+            description: "Không tìm thấy token đăng nhập",
+            variant: "destructive",
+          });
           return;
         }
 
@@ -67,29 +80,37 @@ export default function MyRequestsPage() {
         }
 
         const data = await response.json();
-        console.log('Fetched my requests:', data);
 
         // Transform API response to match our interface
         const transformedRequests: Request[] = data.content.map((item: any) => ({
           id: item.id,
           requestNumber: item.requestNumber,
-          stationeryName: item.stationery?.name || 'Unknown',
-          stationeryCode: item.stationery?.code || '',
-          quantity: item.quantity,
-          totalCost: item.totalCost || 0,
+          stationeryName: item.items && item.items.length > 0 ? 
+            item.items.length === 1 ? item.items[0].stationeryName : 
+            `${item.items.length} sản phẩm` : 'Unknown',
+          stationeryCode: item.items && item.items.length > 0 ? 
+            item.items.length === 1 ? item.items[0].stationeryCode : 
+            `${item.itemCount} items` : '',
+          quantity: item.items ? item.items.reduce((sum: number, item: any) => sum + item.quantity, 0) : 0,
+          totalCost: item.totalAmount || 0,
           status: item.status,
           toDate: item.toDate,
           reason: item.reason || '',
           createdAt: item.createdAt,
           approvedAt: item.approvedAt,
           approverName: item.approver?.name,
-          rejectionReason: item.rejectionReason
+          rejectionReason: item.rejectionReason,
+          items: item.items || []
         }));
 
         setRequests(transformedRequests);
         setFilteredRequests(transformedRequests);
       } catch (error) {
-        console.error('Error fetching requests:', error);
+        toast({
+          title: "Lỗi",
+          description: "Không thể tải danh sách yêu cầu",
+          variant: "destructive",
+        });
         // Fallback to mock data if API fails
         const mockData: Request[] = [
           {
@@ -170,89 +191,126 @@ export default function MyRequestsPage() {
     return new Date(dateString).toLocaleDateString('vi-VN');
   };
 
-  const handleWithdraw = async (requestId: number) => {
-    if (confirm('Bạn có chắc muốn rút lại yêu cầu này?')) {
-      try {
-        const token = localStorage.getItem('token') || sessionStorage.getItem('token');
-        if (!token) {
-          alert('Không tìm thấy token đăng nhập');
-          return;
-        }
+  const handleWithdrawClick = (requestId: number) => {
+    setSelectedRequestId(requestId);
+    setShowWithdrawModal(true);
+  };
 
-        const response = await fetch(`http://localhost:8080/api/requests/${requestId}/withdraw`, {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${token}`,
-            'Content-Type': 'application/json',
-          },
+  const handleWithdrawConfirm = async () => {
+    if (!selectedRequestId) return;
+    
+    try {
+      const token = localStorage.getItem('token') || sessionStorage.getItem('token');
+      if (!token) {
+        toast({
+          title: "Lỗi",
+          description: "Không tìm thấy token đăng nhập",
+          variant: "destructive",
         });
-
-        if (!response.ok) {
-          const errorData = await response.json().catch(() => ({}));
-          throw new Error(errorData.message || 'Rút lại thất bại');
-        }
-
-        const withdrawnRequest = await response.json();
-        console.log('Withdrawn request:', withdrawnRequest);
-        
-        alert('Yêu cầu đã được rút lại thành công!');
-        
-        // Update local state
-        setRequests(prev => prev.map(req => 
-          req.id === requestId 
-            ? { ...req, status: 'WITHDRAWN' }
-            : req
-        ));
-      } catch (error) {
-        console.error('Error withdrawing request:', error);
-        alert(`Lỗi rút lại: ${error instanceof Error ? error.message : 'Không xác định'}`);
+        return;
       }
+
+      const response = await fetch(`http://localhost:8080/api/requests/${selectedRequestId}/withdraw`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.message || 'Rút lại thất bại');
+      }
+
+      const withdrawnRequest = await response.json();
+      
+      toast({
+        title: "Thành công",
+        description: "Yêu cầu đã được rút lại thành công!",
+      });
+      
+      // Update local state
+      setRequests(prev => prev.map(req => 
+        req.id === selectedRequestId 
+          ? { ...req, status: 'WITHDRAWN' }
+          : req
+      ));
+      
+      setShowWithdrawModal(false);
+      setSelectedRequestId(null);
+    } catch (error) {
+      toast({
+        title: "Lỗi",
+        description: `Lỗi rút lại: ${error instanceof Error ? error.message : 'Không xác định'}`,
+        variant: "destructive",
+      });
     }
   };
 
-  const handleCancel = async (requestId: number) => {
-    const reason = prompt('Vui lòng nhập lý do hủy yêu cầu:');
-    if (!reason) {
-      alert('Vui lòng nhập lý do hủy');
+  const handleCancelClick = (requestId: number) => {
+    setSelectedRequestId(requestId);
+    setCancelReason('');
+    setShowCancelModal(true);
+  };
+
+  const handleCancelConfirm = async () => {
+    if (!selectedRequestId || !cancelReason.trim()) {
+      toast({
+        title: "Lỗi",
+        description: "Vui lòng nhập lý do hủy",
+        variant: "destructive",
+      });
       return;
     }
 
-    if (confirm('Bạn có chắc muốn hủy yêu cầu này?')) {
-      try {
-        const token = localStorage.getItem('token') || sessionStorage.getItem('token');
-        if (!token) {
-          alert('Không tìm thấy token đăng nhập');
-          return;
-        }
-
-        const response = await fetch(`http://localhost:8080/api/requests/${requestId}/cancel?reason=${encodeURIComponent(reason)}`, {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${token}`,
-            'Content-Type': 'application/json',
-          },
+    try {
+      const token = localStorage.getItem('token') || sessionStorage.getItem('token');
+      if (!token) {
+        toast({
+          title: "Lỗi",
+          description: "Không tìm thấy token đăng nhập",
+          variant: "destructive",
         });
-
-        if (!response.ok) {
-          const errorData = await response.json().catch(() => ({}));
-          throw new Error(errorData.message || 'Hủy thất bại');
-        }
-
-        const canceledRequest = await response.json();
-        console.log('Canceled request:', canceledRequest);
-        
-        alert('Yêu cầu đã được hủy thành công!');
-        
-        // Update local state
-        setRequests(prev => prev.map(req => 
-          req.id === requestId 
-            ? { ...req, status: 'CANCELED' }
-            : req
-        ));
-      } catch (error) {
-        console.error('Error canceling request:', error);
-        alert(`Lỗi hủy: ${error instanceof Error ? error.message : 'Không xác định'}`);
+        return;
       }
+
+      const response = await fetch(`http://localhost:8080/api/requests/${selectedRequestId}/cancel?reason=${encodeURIComponent(cancelReason)}`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.message || 'Hủy thất bại');
+      }
+
+      const canceledRequest = await response.json();
+      
+      toast({
+        title: "Thành công",
+        description: "Yêu cầu đã được hủy thành công!",
+      });
+      
+      // Update local state
+      setRequests(prev => prev.map(req => 
+        req.id === selectedRequestId 
+          ? { ...req, status: 'CANCELED' }
+          : req
+      ));
+      
+      setShowCancelModal(false);
+      setSelectedRequestId(null);
+      setCancelReason('');
+    } catch (error) {
+      toast({
+        title: "Lỗi",
+        description: `Lỗi hủy: ${error instanceof Error ? error.message : 'Không xác định'}`,
+        variant: "destructive",
+      });
     }
   };
 
@@ -418,7 +476,7 @@ export default function MyRequestsPage() {
                       <Button 
                         variant="outline" 
                         size="sm"
-                        onClick={() => handleWithdraw(request.id)}
+                        onClick={() => handleWithdrawClick(request.id)}
                       >
                         <Trash2 className="w-4 h-4 mr-2" />
                         Rút lại
@@ -429,7 +487,7 @@ export default function MyRequestsPage() {
                       <Button 
                         variant="outline" 
                         size="sm"
-                        onClick={() => handleCancel(request.id)}
+                        onClick={() => handleCancelClick(request.id)}
                       >
                         <XCircle className="w-4 h-4 mr-2" />
                         Hủy
@@ -476,6 +534,77 @@ export default function MyRequestsPage() {
           </Card>
         )}
       </div>
+
+      {/* Withdraw Confirmation Modal */}
+      {showWithdrawModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4">
+            <h3 className="text-lg font-semibold mb-4">Xác nhận rút lại</h3>
+            <p className="text-gray-600 mb-6">
+              Bạn có chắc muốn rút lại yêu cầu này? Hành động này không thể hoàn tác.
+            </p>
+            <div className="flex gap-3 justify-end">
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setShowWithdrawModal(false);
+                  setSelectedRequestId(null);
+                }}
+              >
+                Hủy
+              </Button>
+              <Button
+                onClick={handleWithdrawConfirm}
+                className="bg-red-600 hover:bg-red-700"
+              >
+                Rút lại
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Cancel Confirmation Modal */}
+      {showCancelModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4">
+            <h3 className="text-lg font-semibold mb-4">Hủy yêu cầu</h3>
+            <div className="mb-4">
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Lý do hủy
+              </label>
+              <textarea
+                value={cancelReason}
+                onChange={(e) => setCancelReason(e.target.value)}
+                className="w-full p-3 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                rows={3}
+                placeholder="Nhập lý do hủy yêu cầu..."
+              />
+            </div>
+            <p className="text-gray-600 mb-6">
+              Bạn có chắc muốn hủy yêu cầu này? Hành động này không thể hoàn tác.
+            </p>
+            <div className="flex gap-3 justify-end">
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setShowCancelModal(false);
+                  setSelectedRequestId(null);
+                  setCancelReason('');
+                }}
+              >
+                Hủy
+              </Button>
+              <Button
+                onClick={handleCancelConfirm}
+                className="bg-red-600 hover:bg-red-700"
+              >
+                Xác nhận hủy
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

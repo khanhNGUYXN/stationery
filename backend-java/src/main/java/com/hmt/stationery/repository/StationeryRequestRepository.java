@@ -19,14 +19,12 @@ public interface StationeryRequestRepository extends JpaRepository<StationeryReq
 
         @Query("SELECT sr FROM StationeryRequest sr " +
                         "LEFT JOIN FETCH sr.requester " +
-                        "LEFT JOIN FETCH sr.stationery " +
                         "LEFT JOIN FETCH sr.approver " +
                         "WHERE sr.requester.id = :requesterId ORDER BY sr.createdAt DESC")
         Page<StationeryRequest> findByRequesterId(@Param("requesterId") Long requesterId, Pageable pageable);
 
         @Query("SELECT sr FROM StationeryRequest sr " +
                         "LEFT JOIN FETCH sr.requester " +
-                        "LEFT JOIN FETCH sr.stationery " +
                         "LEFT JOIN FETCH sr.approver " +
                         "WHERE sr.approver.id = :approverId AND sr.status IN ('SUBMITTED') ORDER BY sr.createdAt DESC")
         Page<StationeryRequest> findPendingApprovalsByApproverId(@Param("approverId") Long approverId,
@@ -34,7 +32,6 @@ public interface StationeryRequestRepository extends JpaRepository<StationeryReq
 
         @Query("SELECT sr FROM StationeryRequest sr " +
                         "LEFT JOIN FETCH sr.requester " +
-                        "LEFT JOIN FETCH sr.stationery " +
                         "LEFT JOIN FETCH sr.approver " +
                         "WHERE sr.status IN ('SUBMITTED') ORDER BY sr.createdAt DESC")
         Page<StationeryRequest> findPendingApprovalsForSuperAdmin(Pageable pageable);
@@ -43,7 +40,7 @@ public interface StationeryRequestRepository extends JpaRepository<StationeryReq
         List<StationeryRequest> findByRequesterIdAndStatus(@Param("requesterId") Long requesterId,
                         @Param("status") StationeryRequest.Status status);
 
-        @Query("SELECT sr FROM StationeryRequest sr WHERE sr.stationery.id = :stationeryId ORDER BY sr.createdAt DESC")
+        @Query("SELECT sr FROM StationeryRequest sr JOIN sr.items ri WHERE ri.stationery.id = :stationeryId ORDER BY sr.createdAt DESC")
         List<StationeryRequest> findByStationeryId(@Param("stationeryId") Long stationeryId);
 
         @Query("SELECT sr FROM StationeryRequest sr WHERE sr.status = :status ORDER BY sr.createdAt DESC")
@@ -55,7 +52,6 @@ public interface StationeryRequestRepository extends JpaRepository<StationeryReq
 
         @Query("SELECT sr FROM StationeryRequest sr " +
                         "LEFT JOIN FETCH sr.requester " +
-                        "LEFT JOIN FETCH sr.stationery " +
                         "LEFT JOIN FETCH sr.approver " +
                         "ORDER BY sr.createdAt DESC")
         Page<StationeryRequest> findAllOrderByCreatedAtDesc(Pageable pageable);
@@ -64,7 +60,7 @@ public interface StationeryRequestRepository extends JpaRepository<StationeryReq
         Long countApprovedRequestsByRequesterAndDateRange(@Param("requesterId") Long requesterId,
                         @Param("fromDate") java.time.LocalDateTime fromDate);
 
-        @Query("SELECT SUM(sr.totalCost) FROM StationeryRequest sr WHERE sr.requester.id = :requesterId AND sr.status = 'APPROVED' AND sr.createdAt >= :fromDate")
+        @Query("SELECT SUM(sr.totalAmount) FROM StationeryRequest sr WHERE sr.requester.id = :requesterId AND sr.status = 'APPROVED' AND sr.createdAt >= :fromDate")
         Double sumApprovedCostByRequesterAndDateRange(@Param("requesterId") Long requesterId,
                         @Param("fromDate") java.time.LocalDateTime fromDate);
 

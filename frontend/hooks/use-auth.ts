@@ -32,9 +32,9 @@ export function useAuth() {
     
     if (token && userData) {
       try {
-        setUser(JSON.parse(userData))
+        const parsedUser = JSON.parse(userData)
+        setUser(parsedUser)
       } catch (error) {
-        console.error('Error parsing user data:', error)
         logout()
       }
     }
