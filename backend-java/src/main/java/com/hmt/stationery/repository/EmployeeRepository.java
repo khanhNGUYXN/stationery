@@ -24,12 +24,15 @@ public interface EmployeeRepository extends JpaRepository<Employee, Long> {
 
     boolean existsByEmployeeNo(String employeeNo);
 
-    @Query("SELECT e FROM Employee e WHERE e.superiorEmployeeNo = :superiorEmployeeNo AND e.isActive = true")
+    @Query("SELECT e FROM Employee e WHERE e.superiorEmployeeNo = :superiorEmployeeNo AND e.status = 'ACTIVE'")
     List<Employee> findSubordinatesBySuperiorEmployeeNo(@Param("superiorEmployeeNo") String superiorEmployeeNo);
 
-    @Query("SELECT e FROM Employee e WHERE e.role = :role AND e.isActive = true")
+    @Query("SELECT e FROM Employee e WHERE e.role = :role AND e.status = 'ACTIVE'")
     List<Employee> findByRole(@Param("role") Employee.Role role);
 
-    @Query("SELECT e FROM Employee e WHERE e.location = :location AND e.isActive = true")
+    @Query("SELECT e FROM Employee e WHERE e.location = :location AND e.status = 'ACTIVE'")
     List<Employee> findByLocation(@Param("location") String location);
+
+    @Query("SELECT e FROM Employee e WHERE e.role IN :roles AND e.status = 'ACTIVE'")
+    List<Employee> findByRoleIn(@Param("roles") List<Employee.Role> roles);
 }

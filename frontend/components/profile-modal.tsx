@@ -95,7 +95,6 @@ export function ProfileModal({ isOpen, onClose, user, onUpdate }: ProfileModalPr
         name: updatedUserData.name,
         role: updatedUserData.role,
         email: updatedUserData.email,
-        grade: updatedUserData.grade,
         location: updatedUserData.location,
         username: updatedUserData.username
       })

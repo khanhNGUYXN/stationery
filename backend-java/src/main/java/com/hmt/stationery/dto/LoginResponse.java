@@ -11,6 +11,8 @@ public class LoginResponse {
     private String token;
     private String refreshToken;
     private EmployeeDto employee;
+    private String error;
+    private Boolean accountDisabled;
 
     @Data
     public static class EmployeeDto {

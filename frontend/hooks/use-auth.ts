@@ -10,15 +10,16 @@ interface User {
   name: string
   role: string
   email: string
-  grade: string
   location: string
   username: string
 }
 
 interface LoginResponse {
-  token: string
-  refreshToken: string
-  employee: User
+  token?: string
+  refreshToken?: string
+  employee?: User
+  error?: string
+  accountDisabled?: boolean
 }
 
 export function useAuth() {
@@ -51,16 +52,21 @@ export function useAuth() {
         body: JSON.stringify({ username, password }),
       })
 
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}))
-        throw new Error(errorData.message || 'Login failed')
-      }
-
       const data: LoginResponse = await response.json()
+      
+      // Check if there's an error in the response
+      if (data.error) {
+        throw new Error(data.error)
+      }
+      
+      // Check if login was successful
+      if (!data.token || !data.employee) {
+        throw new Error('Login failed')
+      }
       
       // Store tokens and user data
       Cookies.set('token', data.token, { expires: 7 })
-      Cookies.set('refreshToken', data.refreshToken, { expires: 30 })
+      Cookies.set('refreshToken', data.refreshToken!, { expires: 30 })
       Cookies.set('user', JSON.stringify(data.employee), { expires: 7 })
       
       // Also store token in localStorage for API calls

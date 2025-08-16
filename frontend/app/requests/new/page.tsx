@@ -36,6 +36,7 @@ export default function NewRequestPage() {
   const [reason, setReason] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [message, setMessage] = useState('');
 
   useEffect(() => {
     // Thêm delay nhỏ để tránh race condition
@@ -53,27 +54,32 @@ export default function NewRequestPage() {
     return () => clearTimeout(timer);
   }, [user, router]);
 
-  const fetchStationeries = async () => {
-    try {
-      const token = localStorage.getItem('token') || Cookies.get('token');
+    const fetchStationeries = async () => {
+      try {
+        const token = localStorage.getItem('token') || Cookies.get('token');
       
       const response = await fetch('http://localhost:8080/api/stationeries', {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-        },
-      });
-      
+          headers: {
+            'Authorization': `Bearer ${token}`,
+          },
+        });
+
       if (response.ok) {
         const data = await response.json();
         setStationeries(data.content || data);
-      }
-    } catch (error) {
+        }
+      } catch (error) {
       // Silent error handling
     }
   };
 
   const addItem = () => {
-    setItems([...items, { stationeryId: 0, quantity: 1 }]);
+    // Check if there's an empty item (stationeryId = 0)
+    const hasEmptyItem = items.some(item => item.stationeryId === 0);
+    
+    if (!hasEmptyItem) {
+      setItems([...items, { stationeryId: 0, quantity: 1 }]);
+    }
   };
 
   const removeItem = (index: number) => {
@@ -82,7 +88,34 @@ export default function NewRequestPage() {
 
   const updateItem = (index: number, field: keyof RequestItem, value: any) => {
     const newItems = [...items];
-    newItems[index] = { ...newItems[index], [field]: value };
+    
+    if (field === 'stationeryId') {
+      // Check if this stationery is already in the list
+      const existingIndex = newItems.findIndex((item, i) => 
+        i !== index && item.stationeryId === value && value !== 0
+      );
+      
+      if (existingIndex !== -1) {
+        // If stationery already exists, increase quantity and remove current item
+        const existingStationery = getSelectedStationery(value);
+        newItems[existingIndex] = {
+          ...newItems[existingIndex],
+          quantity: newItems[existingIndex].quantity + newItems[index].quantity
+        };
+        newItems.splice(index, 1);
+        
+        // Show message
+        setMessage(`Đã gộp vào sản phẩm "${existingStationery?.name}" (tăng số lượng)`);
+        setTimeout(() => setMessage(''), 3000);
+      } else {
+        // Update the current item
+        newItems[index] = { ...newItems[index], [field]: value };
+      }
+    } else {
+      // For other fields (like quantity), just update normally
+      newItems[index] = { ...newItems[index], [field]: value };
+    }
+    
     setItems(newItems);
   };
 
@@ -98,6 +131,15 @@ export default function NewRequestPage() {
       }
       return total;
     }, 0);
+  };
+
+  const formatCurrency = (amount: number) => {
+    return new Intl.NumberFormat('vi-VN', {
+      style: 'currency',
+      currency: 'VND',
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2
+    }).format(amount);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -157,7 +199,7 @@ export default function NewRequestPage() {
     <div className="min-h-screen bg-gray-50 p-6">
       <div className="max-w-7xl mx-auto">
         <div className="mb-6">
-          <h1 className="text-3xl font-bold text-gray-900">Tạo yêu cầu mới</h1>
+            <h1 className="text-3xl font-bold text-gray-900">Tạo yêu cầu mới</h1>
           <p className="text-gray-600 mt-2">Tạo yêu cầu văn phòng phẩm mới</p>
         </div>
 
@@ -170,10 +212,12 @@ export default function NewRequestPage() {
                 <CardHeader>
                   <CardTitle className="flex items-center justify-between">
                     <span>Sản phẩm</span>
-                    <Button type="button" onClick={addItem} variant="outline" size="sm">
-                      <Plus className="w-4 h-4 mr-2" />
-                      Thêm sản phẩm
-                    </Button>
+                    {!items.some(item => item.stationeryId === 0) && (
+                      <Button type="button" onClick={addItem} variant="outline" size="sm">
+                        <Plus className="w-4 h-4 mr-2" />
+                        Thêm sản phẩm
+                      </Button>
+                    )}
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
@@ -197,8 +241,8 @@ export default function NewRequestPage() {
                             >
                               <Trash2 className="w-3 h-3" />
                             </Button>
-                          </div>
-                          
+                  </div>
+
                           <div className="grid grid-cols-3 gap-3">
                             <div className="col-span-2">
                               <Label htmlFor={`stationery-${index}`} className="text-sm">Sản phẩm</Label>
@@ -212,12 +256,12 @@ export default function NewRequestPage() {
                                 <SelectContent>
                                   {stationeries.map((stationery) => (
                                     <SelectItem key={stationery.id} value={stationery.id.toString()}>
-                                      {stationery.name} - {stationery.code}
+                                      {stationery.name} - {stationery.code} (Stock: {stationery.stockQuantity})
                                     </SelectItem>
                                   ))}
                                 </SelectContent>
                               </Select>
-                            </div>
+                          </div>
                             
                             <div>
                               <Label htmlFor={`quantity-${index}`} className="text-sm">Số lượng</Label>
@@ -229,23 +273,23 @@ export default function NewRequestPage() {
                                 onChange={(e) => updateItem(index, 'quantity', parseInt(e.target.value) || 1)}
                                 className="h-9"
                               />
-                            </div>
                           </div>
+                        </div>
                           
                           {item.stationeryId > 0 && (
                             <div className="mt-2 p-2 bg-gray-50 rounded text-xs">
                               <div className="flex items-center justify-between">
-                                <span>Đơn giá: {getSelectedStationery(item.stationeryId)?.cost?.toLocaleString('vi-VN')} VNĐ</span>
-                                <span className="font-medium">Tổng: {(getSelectedStationery(item.stationeryId)?.cost || 0) * item.quantity} VNĐ</span>
+                                <span>Đơn giá: {formatCurrency(getSelectedStationery(item.stationeryId)?.cost || 0)}</span>
+                                <span className="font-medium">Tổng: {formatCurrency((getSelectedStationery(item.stationeryId)?.cost || 0) * item.quantity)}</span>
                               </div>
                               <div className="text-gray-500 mt-1">
                                 Tồn kho: {getSelectedStationery(item.stationeryId)?.stockQuantity || 0}
                               </div>
-                            </div>
-                          )}
-                        </div>
-                      ))}
-                    </div>
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
                   )}
                 </CardContent>
               </Card>
@@ -256,17 +300,17 @@ export default function NewRequestPage() {
                   <CardTitle>Thông tin yêu cầu</CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-4">
-                  <div>
+                    <div>
                     <Label htmlFor="toDate">Ngày cần</Label>
-                    <Input
-                      id="toDate"
-                      type="date"
+                      <Input
+                        id="toDate"
+                        type="date"
                       value={toDate}
                       onChange={(e) => setToDate(e.target.value)}
-                      required
-                    />
+                        required
+                      />
                   </div>
-                  
+
                   <div>
                     <Label htmlFor="reason">Lý do</Label>
                     <Textarea
@@ -284,6 +328,13 @@ export default function NewRequestPage() {
               {error && (
                 <div className="p-4 bg-red-50 border border-red-200 rounded-lg">
                   <p className="text-red-600">{error}</p>
+                </div>
+              )}
+
+              {/* Success message */}
+              {message && (
+                <div className="p-4 bg-green-50 border border-green-200 rounded-lg">
+                  <p className="text-green-600">{message}</p>
                 </div>
               )}
 
@@ -305,9 +356,9 @@ export default function NewRequestPage() {
             {/* Block bên phải - Tổng tiền */}
             <div className="lg:col-span-1">
               <Card className="sticky top-6">
-                <CardHeader>
+                  <CardHeader>
                   <CardTitle>Tổng tiền</CardTitle>
-                </CardHeader>
+                  </CardHeader>
                 <CardContent>
                   {items.length === 0 ? (
                     <div className="text-center py-8 text-gray-500">
@@ -325,12 +376,12 @@ export default function NewRequestPage() {
                             <div key={index} className="flex justify-between items-center text-sm">
                               <div className="flex-1 min-w-0">
                                 <p className="font-medium truncate">{stationery.name}</p>
-                                <p className="text-gray-500 text-xs">{item.quantity} x {stationery.cost?.toLocaleString('vi-VN')} VNĐ</p>
+                                <p className="text-gray-500 text-xs">{item.quantity} x {formatCurrency(stationery.cost || 0)}</p>
                               </div>
                               <div className="text-right ml-2">
-                                <p className="font-medium">{(stationery.cost * item.quantity).toLocaleString('vi-VN')} VNĐ</p>
+                                <p className="font-medium">{formatCurrency(stationery.cost * item.quantity)}</p>
                               </div>
-                            </div>
+                      </div>
                           );
                         })}
                       </div>
@@ -340,24 +391,24 @@ export default function NewRequestPage() {
                         <div className="flex justify-between items-center">
                           <span className="text-lg font-bold">Tổng cộng:</span>
                           <span className="text-xl font-bold text-blue-600">
-                            {calculateTotal().toLocaleString('vi-VN')} VNĐ
+                            {formatCurrency(calculateTotal())}
                           </span>
-                        </div>
                       </div>
+                    </div>
                       
                       {/* Thông tin bổ sung */}
                       <div className="text-xs text-gray-500 space-y-1">
                         <p>• Số sản phẩm: {items.length}</p>
                         <p>• Tổng số lượng: {items.reduce((sum, item) => sum + item.quantity, 0)}</p>
-                      </div>
                     </div>
+                  </div>
                   )}
                 </CardContent>
               </Card>
             </div>
           </div>
-        </form>
-      </div>
-    </div>
-  );
-}
+                 </form>
+       </div>
+     </div>
+   );
+ }

@@ -17,11 +17,11 @@ import {
   Package, 
   ShoppingCart,
   Eye,
-  Tag,
   DollarSign,
   Box,
   Plus,
-  X
+  X,
+  Edit
 } from 'lucide-react';
 
 interface Stationery {
@@ -68,6 +68,21 @@ export default function StationeryPage() {
     title: '',
     message: ''
   });
+
+  // Edit modal state
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [editingStationery, setEditingStationery] = useState<Stationery | null>(null);
+  const [editForm, setEditForm] = useState({
+    name: '',
+    description: '',
+    cost: 0,
+    stockQuantity: 0,
+    minimumStock: 0,
+    category: '',
+    brand: '',
+    model: ''
+  });
+  const [isUpdating, setIsUpdating] = useState(false);
 
   // Fetch real data from API
   useEffect(() => {
@@ -144,8 +159,7 @@ export default function StationeryPage() {
       filtered = filtered.filter(item =>
         item.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
         item.code.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        (item.description && item.description.toLowerCase().includes(searchTerm.toLowerCase())) ||
-        (item.tags && item.tags.some(tag => tag.toLowerCase().includes(searchTerm.toLowerCase())))
+        (item.description && item.description.toLowerCase().includes(searchTerm.toLowerCase()))
       );
     }
 
@@ -187,10 +201,100 @@ export default function StationeryPage() {
     return { status: 'available', text: 'Có sẵn', color: 'text-green-500' };
   };
 
+  // Edit functions
+  const openEditModal = (stationery: Stationery) => {
+    setEditingStationery(stationery);
+    setEditForm({
+      name: stationery.name,
+      description: stationery.description,
+      cost: stationery.cost,
+      stockQuantity: stationery.stockQuantity,
+      minimumStock: stationery.minimumStock,
+      category: stationery.category,
+      brand: stationery.brand,
+      model: stationery.model
+    });
+    setShowEditModal(true);
+  };
+
+  const closeEditModal = () => {
+    setShowEditModal(false);
+    setEditingStationery(null);
+    setEditForm({
+      name: '',
+      description: '',
+      cost: 0,
+      stockQuantity: 0,
+      minimumStock: 0,
+      category: '',
+      brand: '',
+      model: ''
+    });
+  };
+
+  const handleEditSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingStationery) return;
+
+    setIsUpdating(true);
+    try {
+      const token = localStorage.getItem('token') || Cookies.get('token');
+      if (!token) {
+        throw new Error('No authentication token');
+      }
+
+      const response = await fetch(`http://localhost:8080/api/stationeries/${editingStationery.id}`, {
+        method: 'PUT',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(editForm),
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to update stationery');
+      }
+
+      // Refresh the stationeries list
+      const updatedResponse = await fetch('http://localhost:8080/api/stationeries?size=100', {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+      });
+
+      if (updatedResponse.ok) {
+        const data = await updatedResponse.json();
+        setStationeries(data.content || []);
+      }
+
+      setNotification({
+        isOpen: true,
+        type: 'success',
+        title: 'Thành công',
+        message: 'Sản phẩm đã được cập nhật thành công'
+      });
+
+      closeEditModal();
+    } catch (error) {
+      setNotification({
+        isOpen: true,
+        type: 'error',
+        title: 'Lỗi',
+        message: 'Không thể cập nhật sản phẩm. Vui lòng thử lại.'
+      });
+    } finally {
+      setIsUpdating(false);
+    }
+  };
+
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat('vi-VN', {
       style: 'currency',
-      currency: 'VND'
+      currency: 'VND',
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2
     }).format(amount);
   };
 
@@ -325,21 +429,7 @@ export default function StationeryPage() {
                         <span className="font-medium">{item.stockQuantity} cái</span>
                       </div>
 
-                      <div className="flex flex-wrap gap-1 mt-3">
-                        {item.tags.slice(0, 3).map((tag, index) => (
-                          <span
-                            key={index}
-                            className="px-2 py-1 bg-blue-100 text-blue-800 text-xs rounded-full"
-                          >
-                            {tag}
-                          </span>
-                        ))}
-                        {item.tags.length > 3 && (
-                          <span className="px-2 py-1 bg-gray-100 text-gray-600 text-xs rounded-full">
-                            +{item.tags.length - 3}
-                          </span>
-                        )}
-                      </div>
+
 
                       <div className="flex gap-2 mt-4">
                         <Button
@@ -351,6 +441,17 @@ export default function StationeryPage() {
                           <Eye className="w-4 h-4 mr-2" />
                           Chi tiết
                         </Button>
+                        {user?.role === 'SUPER_ADMIN' && (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="flex-1"
+                            onClick={() => openEditModal(item)}
+                          >
+                            <Edit className="w-4 h-4 mr-2" />
+                            Chỉnh sửa
+                          </Button>
+                        )}
                         <Button
                           size="sm"
                           className="flex-1"
@@ -529,6 +630,141 @@ export default function StationeryPage() {
                   Áp dụng
                 </Button>
               </div>
+            </div>
+          </div>
+        )}
+
+        {/* Edit Modal */}
+        {showEditModal && editingStationery && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+            <div className="bg-white rounded-lg p-6 w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+              <div className="flex justify-between items-center mb-6">
+                <h2 className="text-xl font-semibold">Chỉnh sửa sản phẩm</h2>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={closeEditModal}
+                  disabled={isUpdating}
+                >
+                  <X className="w-4 h-4" />
+                </Button>
+              </div>
+
+              <form onSubmit={handleEditSubmit} className="space-y-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <Label htmlFor="edit-name">Tên sản phẩm *</Label>
+                    <Input
+                      id="edit-name"
+                      value={editForm.name}
+                      onChange={(e) => setEditForm(prev => ({ ...prev, name: e.target.value }))}
+                      required
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="edit-cost">Giá (VNĐ) *</Label>
+                    <Input
+                      id="edit-cost"
+                      type="number"
+                      value={editForm.cost}
+                      onChange={(e) => setEditForm(prev => ({ ...prev, cost: parseFloat(e.target.value) || 0 }))}
+                      min="0"
+                      step="0.01"
+                      placeholder="0.00"
+                      required
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <Label htmlFor="edit-description">Mô tả</Label>
+                  <textarea
+                    id="edit-description"
+                    value={editForm.description}
+                    onChange={(e) => setEditForm(prev => ({ ...prev, description: e.target.value }))}
+                    className="w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    rows={3}
+                    aria-label="Mô tả sản phẩm"
+                  />
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div>
+                    <Label htmlFor="edit-stock">Tồn kho *</Label>
+                    <Input
+                      id="edit-stock"
+                      type="number"
+                      value={editForm.stockQuantity}
+                      onChange={(e) => setEditForm(prev => ({ ...prev, stockQuantity: Number(e.target.value) }))}
+                      min="0"
+                      required
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="edit-min-stock">Tồn kho tối thiểu *</Label>
+                    <Input
+                      id="edit-min-stock"
+                      type="number"
+                      value={editForm.minimumStock}
+                      onChange={(e) => setEditForm(prev => ({ ...prev, minimumStock: Number(e.target.value) }))}
+                      min="0"
+                      required
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="edit-category">Danh mục *</Label>
+                    <select
+                      id="edit-category"
+                      value={editForm.category}
+                      onChange={(e) => setEditForm(prev => ({ ...prev, category: e.target.value }))}
+                      className="w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      required
+                      aria-label="Chọn danh mục sản phẩm"
+                    >
+                      <option value="">Chọn danh mục</option>
+                      {categories.filter(cat => cat !== 'all').map(category => (
+                        <option key={category} value={category}>{category}</option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <Label htmlFor="edit-brand">Thương hiệu</Label>
+                    <Input
+                      id="edit-brand"
+                      value={editForm.brand}
+                      onChange={(e) => setEditForm(prev => ({ ...prev, brand: e.target.value }))}
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="edit-model">Model</Label>
+                    <Input
+                      id="edit-model"
+                      value={editForm.model}
+                      onChange={(e) => setEditForm(prev => ({ ...prev, model: e.target.value }))}
+                    />
+                  </div>
+                </div>
+
+                <div className="flex justify-end gap-2 pt-4">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={closeEditModal}
+                    disabled={isUpdating}
+                  >
+                    Hủy
+                  </Button>
+                  <Button
+                    type="submit"
+                    disabled={isUpdating}
+                  >
+                    {isUpdating ? 'Đang cập nhật...' : 'Cập nhật'}
+                  </Button>
+                </div>
+              </form>
             </div>
           </div>
         )}

@@ -19,7 +19,6 @@ interface User {
   approvalStatus: string
   username: string
   role: string
-  grade: string
   location: string
   superiorEmployeeNo: string
   isActive: boolean
@@ -32,8 +31,26 @@ export default function UsersPage() {
   const [loading, setLoading] = useState(true)
   const [updatingUser, setUpdatingUser] = useState<number | null>(null)
   const [approvingUser, setApprovingUser] = useState<number | null>(null)
+  const [roleFilter, setRoleFilter] = useState<string>('all')
+  const [statusFilter, setStatusFilter] = useState<string>('all')
   const { toast } = useToast()
   const { user } = useAuth()
+
+  // Filter users based on selected filters
+  const filteredUsers = users.filter(user => {
+    const matchesRole = roleFilter === 'all' || user.role === roleFilter
+    const matchesStatus = statusFilter === 'all' || 
+      (statusFilter === 'active' && user.isActive && user.approvalStatus === 'APPROVED') ||
+      (statusFilter === 'disabled' && !user.isActive) ||
+      (statusFilter === 'waiting' && user.approvalStatus === 'PENDING')
+    return matchesRole && matchesStatus
+  })
+
+  // Calculate statistics based on filtered users
+  const totalUsers = filteredUsers.length
+  const activeUsers = filteredUsers.filter(user => user.isActive && user.approvalStatus === 'APPROVED').length
+  const inactiveUsers = filteredUsers.filter(user => !user.isActive).length
+  const waitingUsers = filteredUsers.filter(user => user.approvalStatus === 'PENDING').length
 
   useEffect(() => {
     fetchUsers()
@@ -260,8 +277,22 @@ export default function UsersPage() {
     )
   }
 
+  // Check if user has SUPER_ADMIN role
+  if (!user || user.role !== 'SUPER_ADMIN') {
+    return (
+      <div className="container mx-auto p-6">
+        <div className="flex items-center justify-center h-64">
+          <div className="text-center">
+            <p className="text-lg text-red-600">Bạn không có quyền truy cập trang này</p>
+            <p className="text-sm text-gray-600">Yêu cầu quyền Super Admin</p>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
   return (
-    <AuthGuard requiredRole="SUPER_ADMIN">
+    <AuthGuard>
       <div className="container mx-auto p-6">
         <Header 
           title="Quản lý người dùng"
@@ -269,8 +300,128 @@ export default function UsersPage() {
           showHomeButton={true}
         />
 
-      <div className="grid gap-4">
-        {users.map((user) => (
+        {/* Filter Section */}
+        <Card className="mb-6">
+          <CardHeader>
+            <CardTitle className="text-lg">Bộ lọc</CardTitle>
+            <CardDescription>Lọc người dùng theo quyền hạn và trạng thái</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div>
+                <label className="text-sm font-medium mb-2 block">Quyền hạn</label>
+                <Select value={roleFilter} onValueChange={setRoleFilter}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Chọn quyền hạn" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Tất cả quyền hạn</SelectItem>
+                    <SelectItem value="EMPLOYEE">Employee</SelectItem>
+                    <SelectItem value="MANAGER">Manager</SelectItem>
+                    <SelectItem value="SUPER_ADMIN">Super Admin</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <label className="text-sm font-medium mb-2 block">Trạng thái</label>
+                <Select value={statusFilter} onValueChange={setStatusFilter}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Chọn trạng thái" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Tất cả trạng thái</SelectItem>
+                    <SelectItem value="active">Đang hoạt động</SelectItem>
+                    <SelectItem value="disabled">Bị vô hiệu hóa</SelectItem>
+                    <SelectItem value="waiting">Chờ phê duyệt</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="flex items-end">
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    setRoleFilter('all')
+                    setStatusFilter('all')
+                  }}
+                  disabled={roleFilter === 'all' && statusFilter === 'all'}
+                  className="w-full"
+                >
+                  Xóa bộ lọc
+                </Button>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Statistics Cards */}
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+          <Card>
+            <CardContent className="p-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-medium text-muted-foreground">Tổng số tài khoản</p>
+                  <p className="text-2xl font-bold">{totalUsers}</p>
+                </div>
+                <div className="h-8 w-8 bg-blue-100 rounded-full flex items-center justify-center">
+                  <svg className="h-4 w-4 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197m13.5-9a2.5 2.5 0 11-5 0 2.5 2.5 0 015 0z" />
+                  </svg>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardContent className="p-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-medium text-muted-foreground">Đang hoạt động</p>
+                  <p className="text-2xl font-bold text-green-600">{activeUsers}</p>
+                </div>
+                <div className="h-8 w-8 bg-green-100 rounded-full flex items-center justify-center">
+                  <svg className="h-4 w-4 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardContent className="p-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-medium text-muted-foreground">Bị vô hiệu hóa</p>
+                  <p className="text-2xl font-bold text-red-600">{inactiveUsers}</p>
+                </div>
+                <div className="h-8 w-8 bg-red-100 rounded-full flex items-center justify-center">
+                  <svg className="h-4 w-4 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardContent className="p-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-medium text-muted-foreground">Chờ phê duyệt</p>
+                  <p className="text-2xl font-bold text-yellow-600">{waitingUsers}</p>
+                </div>
+                <div className="h-8 w-8 bg-yellow-100 rounded-full flex items-center justify-center">
+                  <svg className="h-4 w-4 text-yellow-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+
+        <div className="grid gap-4">
+        {filteredUsers.map((user) => (
           <Card key={user.id} className="hover:shadow-md transition-shadow">
             <CardHeader>
               <div className="flex items-center justify-between">
@@ -299,22 +450,11 @@ export default function UsersPage() {
               </div>
             </CardHeader>
             <CardContent>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div>
+              <div className="flex items-end justify-between gap-4">
+                <div className="flex-1">
                   <label className="text-sm font-medium">Tên đăng nhập</label>
                   <p className="text-sm text-muted-foreground">{user.username}</p>
                 </div>
-                <div>
-                  <label className="text-sm font-medium">Cấp bậc</label>
-                  <p className="text-sm text-muted-foreground">{user.grade}</p>
-                </div>
-                <div>
-                  <label className="text-sm font-medium">Vị trí</label>
-                  <p className="text-sm text-muted-foreground">{user.location}</p>
-                </div>
-              </div>
-
-              <div className="flex gap-2 mt-4">
                 <div className="flex-1">
                   <label className="text-sm font-medium">Quyền hạn</label>
                   <Select
@@ -332,27 +472,7 @@ export default function UsersPage() {
                     </SelectContent>
                   </Select>
                 </div>
-                <div className="flex items-end gap-2">
-                  {user.approvalStatus === 'PENDING' && (
-                    <>
-                      <Button
-                        variant="default"
-                        size="sm"
-                        onClick={() => approveUser(user.id)}
-                        disabled={approvingUser === user.id}
-                      >
-                        {approvingUser === user.id ? 'Đang duyệt...' : 'Phê duyệt'}
-                      </Button>
-                      <Button
-                        variant="destructive"
-                        size="sm"
-                        onClick={() => rejectUser(user.id)}
-                        disabled={approvingUser === user.id}
-                      >
-                        {approvingUser === user.id ? 'Đang từ chối...' : 'Từ chối'}
-                      </Button>
-                    </>
-                  )}
+                <div>
                   <Button
                     variant={user.isActive ? "destructive" : "default"}
                     size="sm"
@@ -364,15 +484,40 @@ export default function UsersPage() {
                   </Button>
                 </div>
               </div>
+
+              <div className="flex gap-2 mt-4">
+                {user.approvalStatus === 'PENDING' && (
+                  <>
+                    <Button
+                      variant="default"
+                      size="sm"
+                      onClick={() => approveUser(user.id)}
+                      disabled={approvingUser === user.id}
+                    >
+                      {approvingUser === user.id ? 'Đang duyệt...' : 'Phê duyệt'}
+                    </Button>
+                    <Button
+                      variant="destructive"
+                      size="sm"
+                      onClick={() => rejectUser(user.id)}
+                      disabled={approvingUser === user.id}
+                    >
+                      {approvingUser === user.id ? 'Đang từ chối...' : 'Từ chối'}
+                    </Button>
+                  </>
+                )}
+              </div>
             </CardContent>
           </Card>
         ))}
       </div>
 
-      {users.length === 0 && (
+      {filteredUsers.length === 0 && (
         <Card>
           <CardContent className="flex items-center justify-center h-32">
-            <p className="text-muted-foreground">Không có người dùng nào</p>
+            <p className="text-muted-foreground">
+              {users.length === 0 ? 'Không có người dùng nào' : 'Không có người dùng nào phù hợp với bộ lọc'}
+            </p>
           </CardContent>
         </Card>
       )}

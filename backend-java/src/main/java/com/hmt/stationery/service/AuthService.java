@@ -5,6 +5,7 @@ import com.hmt.stationery.dto.LoginRequest;
 import com.hmt.stationery.dto.LoginResponse;
 import com.hmt.stationery.repository.EmployeeRepository;
 import com.hmt.stationery.security.JwtTokenProvider;
+import com.hmt.stationery.security.AccountDisabledException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.authentication.AuthenticationManager;
@@ -12,6 +13,8 @@ import org.springframework.security.authentication.UsernamePasswordAuthenticatio
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.security.authentication.BadCredentialsException;
+import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -28,22 +31,56 @@ public class AuthService {
 
     @Transactional
     public LoginResponse login(LoginRequest request) {
-        Authentication authentication = authenticationManager.authenticate(
-                new UsernamePasswordAuthenticationToken(request.getUsername(), request.getPassword()));
+        try {
+            Authentication authentication = authenticationManager.authenticate(
+                    new UsernamePasswordAuthenticationToken(request.getUsername(), request.getPassword()));
 
-        SecurityContextHolder.getContext().setAuthentication(authentication);
+            SecurityContextHolder.getContext().setAuthentication(authentication);
 
-        Employee employee = employeeRepository.findByUsername(request.getUsername())
-                .orElseThrow(() -> new RuntimeException("Employee not found"));
+            Employee employee = employeeRepository.findByUsername(request.getUsername())
+                    .orElseThrow(() -> new RuntimeException("Employee not found"));
 
-        String token = jwtTokenProvider.generateToken(authentication);
-        String refreshToken = jwtTokenProvider.generateRefreshToken(authentication);
+            // Check if user is active
+            if (employee.getStatus() != Employee.Status.ACTIVE) {
+                throw new AccountDisabledException(
+                        "Tài khoản của bạn đã bị vô hiệu hóa. Vui lòng liên hệ quản trị viên.");
+            }
 
-        return LoginResponse.builder()
-                .token(token)
-                .refreshToken(refreshToken)
-                .employee(mapToEmployeeDto(employee))
-                .build();
+            // Check if user is approved
+            if (employee.getApprovalStatus() != Employee.ApprovalStatus.APPROVED) {
+                if (employee.getApprovalStatus() == Employee.ApprovalStatus.PENDING) {
+                    throw new AccountDisabledException(
+                            "Tài khoản của bạn chưa được phê duyệt. Vui lòng chờ quản trị viên phê duyệt.");
+                } else if (employee.getApprovalStatus() == Employee.ApprovalStatus.REJECTED) {
+                    throw new AccountDisabledException(
+                            "Tài khoản của bạn đã bị từ chối phê duyệt. Vui lòng liên hệ quản trị viên.");
+                } else {
+                    throw new AccountDisabledException(
+                            "Tài khoản của bạn không hợp lệ. Vui lòng liên hệ quản trị viên.");
+                }
+            }
+
+            String token = jwtTokenProvider.generateToken(authentication);
+            String refreshToken = jwtTokenProvider.generateRefreshToken(authentication);
+
+            return LoginResponse.builder()
+                    .token(token)
+                    .refreshToken(refreshToken)
+                    .employee(mapToEmployeeDto(employee))
+                    .build();
+        } catch (AccountDisabledException e) {
+            // Re-throw the AccountDisabledException to be handled by the controller
+            throw e;
+        } catch (BadCredentialsException e) {
+            // For wrong password
+            throw new RuntimeException("Tên đăng nhập hoặc mật khẩu không đúng");
+        } catch (UsernameNotFoundException e) {
+            // For user not found
+            throw new RuntimeException("Tên đăng nhập hoặc mật khẩu không đúng");
+        } catch (Exception e) {
+            // For other authentication failures, throw a generic error
+            throw new RuntimeException("Tên đăng nhập hoặc mật khẩu không đúng");
+        }
     }
 
     @Transactional

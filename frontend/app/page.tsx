@@ -39,10 +39,10 @@ export default function HomePage() {
         description: 'Chào mừng đến với Hệ thống Quản lý Văn phòng phẩm',
       })
       // Redirect is handled in useAuth hook
-    } catch (error) {
+    } catch (error: any) {
       toast({
         title: 'Đăng nhập thất bại',
-        description: 'Tên đăng nhập hoặc mật khẩu không đúng',
+        description: error.message || 'Tên đăng nhập hoặc mật khẩu không đúng',
         variant: 'destructive',
       })
     } finally {

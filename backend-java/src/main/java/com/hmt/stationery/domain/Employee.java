@@ -66,8 +66,9 @@ public class Employee {
     @Column(name = "password_hash", nullable = false)
     private String passwordHash;
 
-    @Column(name = "is_active", nullable = false)
-    private Boolean isActive = true;
+    @Enumerated(EnumType.STRING)
+    @Column(name = "status", nullable = false)
+    private Status status = Status.ACTIVE;
 
     @CreatedDate
     @Column(name = "created_at", nullable = false, updatable = false)
@@ -87,6 +88,11 @@ public class Employee {
         PENDING,
         APPROVED,
         REJECTED
+    }
+
+    public enum Status {
+        ACTIVE,
+        INACTIVE
     }
 
     @PrePersist

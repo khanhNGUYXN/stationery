@@ -8,6 +8,7 @@ import com.hmt.stationery.dto.ProfileUpdateRequest;
 import com.hmt.stationery.dto.ChangePasswordRequest;
 import com.hmt.stationery.service.AuthService;
 import com.hmt.stationery.service.UserManagementService;
+import com.hmt.stationery.security.AccountDisabledException;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -27,8 +28,25 @@ public class AuthController {
 
     @PostMapping("/login")
     public ResponseEntity<LoginResponse> login(@RequestBody LoginRequest request) {
-        LoginResponse response = authService.login(request);
-        return ResponseEntity.ok(response);
+        try {
+            LoginResponse response = authService.login(request);
+            return ResponseEntity.ok(response);
+        } catch (AccountDisabledException e) {
+            // Return a specific error response for disabled accounts
+            return ResponseEntity.status(401)
+                    .body(LoginResponse.builder()
+                            .error("Tài khoản của bạn đã bị vô hiệu hóa. Vui lòng liên hệ quản trị viên.")
+                            .accountDisabled(true)
+                            .build());
+        } catch (Exception e) {
+            // Return a generic error response for other authentication failures
+            log.error("Login failed for user: {}", request.getUsername(), e);
+            return ResponseEntity.status(401)
+                    .body(LoginResponse.builder()
+                            .error("Tên đăng nhập hoặc mật khẩu không đúng")
+                            .accountDisabled(false)
+                            .build());
+        }
     }
 
     @GetMapping("/me")

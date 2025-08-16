@@ -32,6 +32,7 @@ export default function DashboardPage() {
     approvedRequests: 0,
     totalStationeries: 0
   });
+  const [recentActivities, setRecentActivities] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showProfileModal, setShowProfileModal] = useState(false);
   const [notification, setNotification] = useState<{
@@ -54,6 +55,69 @@ export default function DashboardPage() {
       case 'MANAGER': return 'Quản lý';
       case 'SUPER_ADMIN': return 'Quản trị viên';
       default: return role;
+    }
+  };
+
+  const formatTimeAgo = (dateString: string) => {
+    const now = new Date();
+    const date = new Date(dateString);
+    const diffInMs = now.getTime() - date.getTime();
+    const diffInHours = Math.floor(diffInMs / (1000 * 60 * 60));
+    const diffInDays = Math.floor(diffInHours / 24);
+
+    if (diffInHours < 1) {
+      return 'Vừa xong';
+    } else if (diffInHours < 24) {
+      return `${diffInHours} giờ trước`;
+    } else if (diffInDays < 7) {
+      return `${diffInDays} ngày trước`;
+    } else {
+      return date.toLocaleDateString('vi-VN');
+    }
+  };
+
+  const getStatusInfo = (status: string) => {
+    switch (status) {
+      case 'SUBMITTED':
+        return {
+          icon: Plus,
+          color: 'bg-blue-100 text-blue-600',
+          bgColor: 'bg-blue-100',
+          textColor: 'text-blue-800',
+          label: 'Chờ phê duyệt'
+        };
+      case 'APPROVED':
+        return {
+          icon: CheckCircle,
+          color: 'bg-green-100 text-green-600',
+          bgColor: 'bg-green-100',
+          textColor: 'text-green-800',
+          label: 'Đã phê duyệt'
+        };
+      case 'REJECTED':
+        return {
+          icon: AlertCircle,
+          color: 'bg-red-100 text-red-600',
+          bgColor: 'bg-red-100',
+          textColor: 'text-red-800',
+          label: 'Từ chối'
+        };
+      case 'CANCELED':
+        return {
+          icon: AlertCircle,
+          color: 'bg-yellow-100 text-yellow-600',
+          bgColor: 'bg-yellow-100',
+          textColor: 'text-yellow-800',
+          label: 'Đã hủy'
+        };
+      default:
+        return {
+          icon: AlertCircle,
+          color: 'bg-gray-100 text-gray-600',
+          bgColor: 'bg-gray-100',
+          textColor: 'text-gray-800',
+          label: status
+        };
     }
   };
 
@@ -160,6 +224,21 @@ export default function DashboardPage() {
             approvedRequests,
             totalStationeries
           });
+
+          // Fetch recent activities (latest 5 requests)
+          const recentActivitiesData = requestsData.content
+            .sort((a: any, b: any) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+            .slice(0, 5)
+            .map((request: any) => ({
+              id: request.id,
+              type: 'request',
+              title: `Yêu cầu: ${request.items?.[0]?.stationeryName || 'Nhiều sản phẩm'}`,
+              status: request.status,
+              createdAt: request.createdAt,
+              requesterName: request.requesterName
+            }));
+
+          setRecentActivities(recentActivitiesData);
         }
       } catch (error) {
         setNotification({
@@ -316,52 +395,37 @@ export default function DashboardPage() {
               </CardDescription>
             </CardHeader>
             <CardContent>
-              <div className="space-y-4">
-                <div className="flex items-center p-3 bg-gray-50 rounded-lg">
-                  <div className="p-2 bg-blue-100 rounded-lg">
-                    <Plus className="w-4 h-4 text-blue-600" />
-                  </div>
-                  <div className="ml-3">
-                    <p className="font-medium">Yêu cầu mới: Bút bi xanh</p>
-                    <p className="text-sm text-gray-600">2 giờ trước</p>
-                  </div>
-                  <div className="ml-auto">
-                    <span className="px-2 py-1 bg-blue-100 text-blue-800 text-xs rounded-full">
-                      Chờ phê duyệt
-                    </span>
-                  </div>
+              {recentActivities.length === 0 ? (
+                <div className="text-center py-8 text-gray-500">
+                  <p>Chưa có hoạt động nào</p>
                 </div>
-
-                <div className="flex items-center p-3 bg-gray-50 rounded-lg">
-                  <div className="p-2 bg-green-100 rounded-lg">
-                    <CheckCircle className="w-4 h-4 text-green-600" />
-                  </div>
-                  <div className="ml-3">
-                    <p className="font-medium">Yêu cầu được phê duyệt: Giấy A4</p>
-                    <p className="text-sm text-gray-600">1 ngày trước</p>
-                  </div>
-                  <div className="ml-auto">
-                    <span className="px-2 py-1 bg-green-100 text-green-800 text-xs rounded-full">
-                      Đã phê duyệt
-                    </span>
-                  </div>
+              ) : (
+                <div className="space-y-4">
+                  {recentActivities.map((activity: any) => {
+                    const statusInfo = getStatusInfo(activity.status);
+                    const StatusIcon = statusInfo.icon;
+                    
+                    return (
+                      <div key={activity.id} className="flex items-center p-3 bg-gray-50 rounded-lg">
+                        <div className={`p-2 rounded-lg ${statusInfo.color}`}>
+                          <StatusIcon className="w-4 h-4" />
+                        </div>
+                        <div className="ml-3 flex-1">
+                          <p className="font-medium">{activity.title}</p>
+                          <p className="text-sm text-gray-600">
+                            {activity.requesterName} • {formatTimeAgo(activity.createdAt)}
+                          </p>
+                        </div>
+                        <div className="ml-auto">
+                          <span className={`px-2 py-1 ${statusInfo.bgColor} ${statusInfo.textColor} text-xs rounded-full`}>
+                            {statusInfo.label}
+                          </span>
+                        </div>
+                      </div>
+                    );
+                  })}
                 </div>
-
-                <div className="flex items-center p-3 bg-gray-50 rounded-lg">
-                  <div className="p-2 bg-yellow-100 rounded-lg">
-                    <AlertCircle className="w-4 h-4 text-yellow-600" />
-                  </div>
-                  <div className="ml-3">
-                    <p className="font-medium">Yêu cầu bị từ chối: Dập ghim</p>
-                    <p className="text-sm text-gray-600">2 ngày trước</p>
-                  </div>
-                  <div className="ml-auto">
-                    <span className="px-2 py-1 bg-red-100 text-red-800 text-xs rounded-full">
-                      Từ chối
-                    </span>
-                  </div>
-                </div>
-              </div>
+              )}
             </CardContent>
           </Card>
         </div>

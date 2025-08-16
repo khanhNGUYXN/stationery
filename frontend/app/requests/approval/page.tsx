@@ -210,7 +210,9 @@ export default function ApprovalPage() {
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat('vi-VN', {
       style: 'currency',
-      currency: 'VND'
+      currency: 'VND',
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2
     }).format(amount);
   };
 
@@ -749,7 +751,7 @@ export default function ApprovalPage() {
                           onChange={(e) => setRejectionReason(e.target.value)}
                           className="w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                           rows={3}
-                          placeholder="Nhập lý do từ chối (không bắt buộc)"
+                          placeholder="Nhập lý do từ chối (bắt buộc)"
                         />
                       </div>
                       

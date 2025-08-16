@@ -51,7 +51,7 @@ public class UserManagementService {
         employee.setRole(Employee.Role.EMPLOYEE); // Default role
         employee.setGrade("L1"); // Default grade
         employee.setLocation("Ho Chi Minh"); // Default location
-        employee.setIsActive(true);
+        employee.setStatus(Employee.Status.ACTIVE);
 
         Employee savedEmployee = employeeRepository.save(employee);
         return mapToUserManagementDto(savedEmployee);
@@ -106,7 +106,7 @@ public class UserManagementService {
         Employee employee = employeeRepository.findById(userId)
                 .orElseThrow(() -> new RuntimeException("User not found"));
 
-        employee.setIsActive(request.getIsActive());
+        employee.setStatus(request.getIsActive() ? Employee.Status.ACTIVE : Employee.Status.INACTIVE);
         employee.setUpdatedAt(LocalDateTime.now());
 
         Employee savedEmployee = employeeRepository.save(employee);
@@ -220,7 +220,7 @@ public class UserManagementService {
         dto.setGrade(employee.getGrade());
         dto.setLocation(employee.getLocation());
         dto.setSuperiorEmployeeNo(employee.getSuperiorEmployeeNo());
-        dto.setIsActive(employee.getIsActive());
+        dto.setIsActive(employee.getStatus() == Employee.Status.ACTIVE);
         dto.setCreatedAt(employee.getCreatedAt());
         dto.setUpdatedAt(employee.getUpdatedAt());
         return dto;

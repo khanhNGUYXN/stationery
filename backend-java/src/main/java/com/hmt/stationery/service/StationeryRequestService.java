@@ -21,6 +21,8 @@ import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -87,30 +89,14 @@ public class StationeryRequestService {
         request.setTotalAmount(totalAmount);
         request.setItemCount(itemCount);
 
-        // Auto approve for SUPER_ADMIN
-        if (currentEmployee.getRole() == Role.SUPER_ADMIN) {
-            request.setStatus(StationeryRequest.Status.APPROVED);
-            request.setApprovedAt(java.time.LocalDateTime.now());
-            request.addHistory("REQUEST_CREATED", "Request created and auto-approved for SUPER_ADMIN", currentEmployee);
-            request.addHistory("REQUEST_APPROVED", "Auto-approved for SUPER_ADMIN", currentEmployee);
-        } else {
-            request.setStatus(StationeryRequest.Status.SUBMITTED);
-            request.addHistory("REQUEST_CREATED", "Request created", currentEmployee);
-        }
+        // All requests start as SUBMITTED (no auto-approval for anyone)
+        request.setStatus(StationeryRequest.Status.SUBMITTED);
+        request.addHistory("REQUEST_CREATED", "Request created", currentEmployee);
 
         StationeryRequest savedRequest = requestRepository.save(request);
 
-        // Update stock if auto-approved
-        if (currentEmployee.getRole() == Role.SUPER_ADMIN) {
-            updateStock(savedRequest);
-        }
-
-        // Send notifications
-        if (currentEmployee.getRole() == Role.SUPER_ADMIN) {
-            notificationService.sendRequestApprovedNotification(savedRequest);
-        } else {
-            notificationService.sendRequestCreatedNotification(savedRequest);
-        }
+        // Send notification for new request
+        notificationService.sendRequestCreatedNotification(savedRequest);
 
         return mapToDto(savedRequest);
     }
@@ -181,7 +167,7 @@ public class StationeryRequestService {
         // Both Manager and Super Admin can approve any request
         boolean canApprove = (currentEmployee.getRole() == Employee.Role.MANAGER ||
                 currentEmployee.getRole() == Employee.Role.SUPER_ADMIN) ||
-                request.getApprover().getId().equals(currentEmployee.getId());
+                (request.getApprover() != null && request.getApprover().getId().equals(currentEmployee.getId()));
 
         if (!canApprove) {
             throw new RuntimeException("You are not authorized to approve this request");
@@ -212,10 +198,16 @@ public class StationeryRequestService {
         StationeryRequest request = requestRepository.findById(requestId)
                 .orElseThrow(() -> new RuntimeException("Request not found"));
 
+        log.info("Reject request - Current employee: {} (role: {}), Request ID: {}, Status: {}",
+                currentEmployee.getName(), currentEmployee.getRole(), requestId, request.getStatus());
+
         // Both Manager and Super Admin can reject any request
         boolean canReject = (currentEmployee.getRole() == Employee.Role.MANAGER ||
                 currentEmployee.getRole() == Employee.Role.SUPER_ADMIN) ||
-                request.getApprover().getId().equals(currentEmployee.getId());
+                (request.getApprover() != null && request.getApprover().getId().equals(currentEmployee.getId()));
+
+        log.info("Can reject: {}, Approver: {}", canReject,
+                request.getApprover() != null ? request.getApprover().getName() : "null");
 
         if (!canReject) {
             throw new RuntimeException("You are not authorized to reject this request");
@@ -233,6 +225,8 @@ public class StationeryRequestService {
 
         // Send notifications
         notificationService.sendRequestRejectedNotification(savedRequest);
+
+        log.info("Request {} rejected successfully by {}", requestId, currentEmployee.getName());
 
         return mapToDto(savedRequest);
     }
@@ -323,9 +317,21 @@ public class StationeryRequestService {
     }
 
     private Employee findApprover(Employee employee) {
-        // SUPER_ADMIN doesn't need approval from superior
+        // For SUPER_ADMIN, find another SUPER_ADMIN or MANAGER to approve
         if (employee.getRole() == Role.SUPER_ADMIN) {
-            return employee; // Self-approval for SUPER_ADMIN
+            // Find another SUPER_ADMIN or MANAGER to approve
+            List<Employee> approvers = employeeRepository.findByRoleIn(Arrays.asList(Role.SUPER_ADMIN, Role.MANAGER));
+            approvers = approvers.stream()
+                    .filter(e -> !e.getId().equals(employee.getId())) // Exclude self
+                    .collect(Collectors.toList());
+
+            if (approvers.isEmpty()) {
+                throw new RuntimeException(
+                        "Không tìm thấy người phê duyệt cho tài khoản SUPER_ADMIN. Vui lòng liên hệ quản trị viên.");
+            }
+
+            // Return the first available approver
+            return approvers.get(0);
         }
 
         if (employee.getSuperiorEmployeeNo() == null) {

@@ -34,6 +34,9 @@ export default function NewStationeryPage() {
   const { user } = useAuth();
   const { toast } = useToast();
   const [loading, setLoading] = useState(false);
+  
+  // Categories list
+  const categories = ['Writing', 'Paper', 'Office Supplies'];
   const [formData, setFormData] = useState<StationeryForm>({
     code: '',
     name: '',
@@ -58,6 +61,17 @@ export default function NewStationeryPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    
+    // Validate required fields
+    if (!formData.category) {
+      toast({
+        title: 'Lỗi',
+        description: 'Vui lòng chọn danh mục sản phẩm',
+        variant: 'destructive',
+      });
+      return;
+    }
+    
     setLoading(true);
 
     try {
@@ -224,9 +238,9 @@ export default function NewStationeryPage() {
                         type="number"
                         value={formData.cost}
                         onChange={(e) => handleInputChange('cost', e.target.value)}
-                        placeholder="0"
+                        placeholder="0.00"
                         min="0"
-                        step="1000"
+                        step="0.01"
                         required
                       />
                     </div>
@@ -261,12 +275,19 @@ export default function NewStationeryPage() {
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                     <div className="space-y-2">
                       <Label htmlFor="category">Danh mục</Label>
-                      <Input
+                      <select
                         id="category"
                         value={formData.category}
                         onChange={(e) => handleInputChange('category', e.target.value)}
-                        placeholder="VD: Bút viết"
-                      />
+                        className="w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        required
+                        aria-label="Chọn danh mục sản phẩm"
+                      >
+                        <option value="">Chọn danh mục</option>
+                        {categories.map(category => (
+                          <option key={category} value={category}>{category}</option>
+                        ))}
+                      </select>
                     </div>
                     
                     <div className="space-y-2">
